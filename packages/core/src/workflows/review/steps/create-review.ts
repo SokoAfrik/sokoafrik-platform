@@ -14,8 +14,15 @@ export const createReviewStep = createStep(
 
     const review = await service.createReviews({
       reference: input.reference,
+      // SokoAfrik: stored as a column, not only implied by a module link. Drivers
+      // have no module to link to, and it makes "every review of X" one query.
+      reference_id: input.reference_id ?? null,
       rating: input.rating,
       customer_note: input.customer_note ?? null,
+      // Medusa types a json() column as Record<string, unknown>; the column itself
+      // holds any JSON. The array shape is the useful one at the API boundary, so
+      // the cast lives here and nowhere else.
+      images: (input.images ?? null) as unknown as Record<string, unknown> | null,
     })
 
     await link.create([

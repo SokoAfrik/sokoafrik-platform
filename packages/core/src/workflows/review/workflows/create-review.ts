@@ -17,28 +17,30 @@ export const createReviewWorkflow = createWorkflow(
     validateReviewStep(input)
     const review = createReviewStep(input)
 
+    // SokoAfrik: three references now, not two. This used to be a ternary, which
+    // would have quietly linked a DRIVER id into the seller table — a silent
+    // corruption rather than an error. Drivers live in SokoAfrik's delivery layer
+    // and have no Medusa module, so they link to nothing here; the review carries
+    // `reference_id` instead, and the order link (created in the step) is what ties
+    // the review to the delivery it came from.
     const link = transform({ input, review }, ({ input, review }) => {
-      return input.reference === "product"
-        ? [
-            {
-              [Modules.PRODUCT]: {
-                product_id: input.reference_id,
-              },
-              [MercurModules.REVIEW]: {
-                review_id: review.id,
-              },
-            },
-          ]
-        : [
-            {
-              [MercurModules.SELLER]: {
-                seller_id: input.reference_id,
-              },
-              [MercurModules.REVIEW]: {
-                review_id: review.id,
-              },
-            },
-          ]
+      if (input.reference === "product") {
+        return [
+          {
+            [Modules.PRODUCT]: { product_id: input.reference_id },
+            [MercurModules.REVIEW]: { review_id: review.id },
+          },
+        ]
+      }
+      if (input.reference === "seller") {
+        return [
+          {
+            [MercurModules.SELLER]: { seller_id: input.reference_id },
+            [MercurModules.REVIEW]: { review_id: review.id },
+          },
+        ]
+      }
+      return []
     })
 
     createRemoteLinkStep(link)

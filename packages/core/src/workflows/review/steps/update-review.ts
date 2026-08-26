@@ -10,7 +10,7 @@ export const updateReviewStep = createStep(
 
     const [previous] = await service.listReviews({ id: input.id })
 
-    const review = await service.updateReviews(input)
+    const review = await service.updateReviews(input as unknown as Parameters<typeof service.updateReviews>[0])
 
     return new StepResponse(review, previous)
   },
