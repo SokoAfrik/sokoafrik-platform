@@ -191,12 +191,8 @@ medusaIntegrationTestRunner({
                 }
             }
 
-            const completeCartCheckout = async (
-                offerId: string,
-                variantId: string,
-                quantity: number
-            ) => {
-                const cart = (
+            const createCheckoutCart = async () =>
+                (
                     await api.post(
                         `/store/carts`,
                         {
@@ -208,6 +204,11 @@ medusaIntegrationTestRunner({
                     )
                 ).data.cart
 
+            const completePreparedCartCheckout = async (
+                cart: any,
+                offerId: string,
+                quantity: number
+            ) => {
                 await api.post(
                     `/store/carts/${cart.id}/line-items`,
                     { offer_id: offerId, quantity },
@@ -275,6 +276,19 @@ medusaIntegrationTestRunner({
                     storeHeaders
                 )
                 return { cart, completeResp }
+            }
+
+            const completeCartCheckout = async (
+                offerId: string,
+                variantId: string,
+                quantity: number
+            ) => {
+                const cart = await createCheckoutCart()
+                return completePreparedCartCheckout(
+                    cart,
+                    offerId,
+                    quantity
+                )
             }
 
             beforeAll(async () => {
@@ -403,6 +417,68 @@ medusaIntegrationTestRunner({
                 // Reservation = qty (2) × required_quantity (3) = 6
                 expect(Number(levels[0].reserved_quantity)).toEqual(6)
                 expect(Number(levels[0].stocked_quantity)).toEqual(50)
+            })
+
+            it("stock reaches zero and exactly one of two concurrent last-unit checkouts succeeds", async () => {
+                const seed = await seedSellerOfferWithShipping({
+                    email: "last-unit@test.com",
+                    name: "LastUnit",
+                    stocked: 1,
+                    offerPrice: 3000,
+                })
+
+                const [firstCart, secondCart] = await Promise.all([
+                    createCheckoutCart(),
+                    createCheckoutCart(),
+                ])
+
+                const results = await Promise.allSettled([
+                    completePreparedCartCheckout(
+                        firstCart,
+                        seed.offer.id,
+                        1
+                    ),
+                    completePreparedCartCheckout(
+                        secondCart,
+                        seed.offer.id,
+                        1
+                    ),
+                ])
+                const succeeded = results.filter(
+                    (result): result is PromiseFulfilledResult<any> =>
+                        result.status === "fulfilled"
+                )
+                const refused = results.filter(
+                    (result): result is PromiseRejectedResult =>
+                        result.status === "rejected"
+                )
+
+                expect(succeeded).toHaveLength(1)
+                expect(succeeded[0].value.completeResp).toMatchObject({
+                    status: 200,
+                    data: { type: "order_group" },
+                })
+                expect(refused).toHaveLength(1)
+                expect(refused[0].reason.response).toMatchObject({
+                    status: 400,
+                })
+
+                const query = appContainer.resolve(
+                    ContainerRegistrationKeys.QUERY
+                )
+                const { data: levels } = await query.graph({
+                    entity: "inventory_level",
+                    filters: {
+                        inventory_item_id: seed.inventoryItemId,
+                        location_id: seed.stockLocation.id,
+                    },
+                    fields: ["stocked_quantity", "reserved_quantity"],
+                })
+                expect(levels).toHaveLength(1)
+                expect(
+                    Number(levels[0].stocked_quantity) -
+                        Number(levels[0].reserved_quantity)
+                ).toEqual(0)
             })
 
             it("should split offer lines per seller into per-seller orders preserving offer link", async () => {
