@@ -439,6 +439,135 @@ medusaIntegrationTestRunner({
                     })
                 })
 
+                it("keeps per-vendor order totals equal to the server-computed cart total", async () => {
+                    const cart = (
+                        await api.post(
+                            "/store/carts",
+                            {
+                                region_id: region.id,
+                                sales_channel_id: salesChannel.id,
+                                currency_code: "usd",
+                            },
+                            storeHeaders
+                        )
+                    ).data.cart
+
+                    await api.post(
+                        `/store/carts/${cart.id}/line-items`,
+                        { offer_id: offer1.id, quantity: 2 },
+                        storeHeaders
+                    )
+                    const pricedCart = (
+                        await api.post(
+                            `/store/carts/${cart.id}/line-items`,
+                            { offer_id: offer2.id, quantity: 1 },
+                            storeHeaders
+                        )
+                    ).data.cart
+                    expect(pricedCart.subtotal).toEqual(3500)
+
+                    const shippingOptions = (
+                        await api.get(
+                            `/store/shipping-options?cart_id=${cart.id}`,
+                            storeHeaders
+                        )
+                    ).data.shipping_options as Record<string, any[]>
+                    for (const options of Object.values(shippingOptions)) {
+                        expect(options.length).toBeGreaterThan(0)
+                        await api.post(
+                            `/store/carts/${cart.id}/shipping-methods`,
+                            { option_id: options[0].id },
+                            storeHeaders
+                        )
+                    }
+
+                    const completedCart = (
+                        await api.get(`/store/carts/${cart.id}`, storeHeaders)
+                    ).data.cart
+                    expect(completedCart).toMatchObject({
+                        subtotal: 4600,
+                        shipping_total: 1100,
+                        total: 4600,
+                    })
+
+                    const paymentCollection = (
+                        await api.post(
+                            "/store/payment-collections",
+                            { cart_id: cart.id },
+                            storeHeaders
+                        )
+                    ).data.payment_collection
+                    await api.post(
+                        `/store/payment-collections/${paymentCollection.id}/payment-sessions`,
+                        { provider_id: "pp_system_default" },
+                        storeHeaders
+                    )
+
+                    const completion = await api.post(
+                        `/store/carts/${cart.id}/complete`,
+                        {},
+                        storeHeaders
+                    )
+                    expect(completion.status).toEqual(200)
+                    expect(completion.data.type).toEqual("order_group")
+
+                    const query = appContainer.resolve(
+                        ContainerRegistrationKeys.QUERY
+                    )
+                    const { data: orderGroups } = await query.graph({
+                        entity: "order_group",
+                        filters: { id: completion.data.order_group.id },
+                        fields: [
+                            "total",
+                            "seller_count",
+                            "orders.id",
+                            "orders.total",
+                            "orders.subtotal",
+                            "orders.shipping_total",
+                            "orders.seller.id",
+                        ],
+                    })
+                    const orderGroup = orderGroups[0]
+                    expect(orderGroup.seller_count).toEqual(2)
+                    const minor = (value: { toString(): string }) => {
+                        const [integer, fraction = ""] = value.toString().split(".")
+                        expect(fraction).toMatch(/^0*$/)
+                        return BigInt(integer)
+                    }
+                    expect(minor(orderGroup.total)).toEqual(
+                        BigInt(completedCart.total)
+                    )
+
+                    const totalsBySeller = Object.fromEntries(
+                        orderGroup.orders.map((order: any) => [
+                            order.seller.id,
+                            {
+                                subtotal: minor(order.subtotal),
+                                shipping: minor(order.shipping_total),
+                                total: minor(order.total),
+                            },
+                        ])
+                    )
+                    expect(totalsBySeller).toEqual({
+                        [seller1.id]: {
+                            subtotal: 2500n,
+                            shipping: 500n,
+                            total: 2500n,
+                        },
+                        [seller2.id]: {
+                            subtotal: 2100n,
+                            shipping: 600n,
+                            total: 2100n,
+                        },
+                    })
+                    expect(
+                        orderGroup.orders.reduce(
+                            (sum: bigint, order: any) => sum + minor(order.total),
+                            0n
+                        )
+                    ).toEqual(minor(orderGroup.total))
+                })
+
                 it("should create single order when cart has items from one seller only", async () => {
                     // 1. Create cart with customer authentication
                     const cartResponse = await api.post(
