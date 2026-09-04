@@ -19,26 +19,26 @@ jest.setTimeout(180 * 1000)
 
 medusaIntegrationTestRunner({
   inApp: true,
-  env: {},
+  env: { MEDUSA_FF_PRODUCT_REQUEST: "false" },
   testSuite: ({ api, getContainer }) => {
     describe("Checkout totals", () => {
-      it("computes the cart total from the persisted offer price", async () => {
+      const createPricedCart = async (fixture: string) => {
         const container: MedusaContainer = getContainer()
         const seller = await createSellerUser(container, {
-          email: "server-total@sokoafrik.test",
-          name: "Server Total Seller",
+          email: `${fixture}@sokoafrik.test`,
+          name: `${fixture} Seller`,
         })
 
         const salesChannelModule =
           container.resolve<ISalesChannelModuleService>(Modules.SALES_CHANNEL)
         const salesChannel = await salesChannelModule.createSalesChannels({
-          name: "Server Total Channel",
+          name: `${fixture} Channel`,
         })
 
         const regionModule =
           container.resolve<IRegionModuleService>(Modules.REGION)
         const region = await regionModule.createRegions({
-          name: "Server Total Region",
+          name: `${fixture} Region`,
           currency_code: "usd",
           countries: ["us"],
         })
@@ -52,7 +52,7 @@ medusaIntegrationTestRunner({
         const stockLocation = (
           await api.post(
             "/vendor/stock-locations",
-            { name: "Server Total Warehouse" },
+            { name: `${fixture} Warehouse` },
             seller.headers
           )
         ).data.stock_location
@@ -63,8 +63,8 @@ medusaIntegrationTestRunner({
         )
 
         const product = await createVendorProduct(api, seller.headers, {
-          title: "Server-priced product",
-          sku: "SERVER-TOTAL-VARIANT",
+          title: `${fixture} product`,
+          sku: `${fixture}-VARIANT`,
         })
         await api.post(
           `/vendor/sales-channels/${salesChannel.id}/products`,
@@ -75,7 +75,7 @@ medusaIntegrationTestRunner({
         const shippingProfile = (
           await api.post(
             "/vendor/shipping-profiles",
-            { name: "Server Total Profile", type: "default" },
+            { name: `${fixture} Profile`, type: "default" },
             seller.headers
           )
         ).data.shipping_profile
@@ -83,12 +83,12 @@ medusaIntegrationTestRunner({
           await api.post(
             "/vendor/offers",
             {
-              sku: "SERVER-TOTAL-OFFER",
+              sku: `${fixture}-OFFER`,
               variant_id: product.variants[0].id,
               shipping_profile_id: shippingProfile.id,
               inventory_items: [
                 {
-                  title: "Server Total Inventory",
+                  title: `${fixture} Inventory`,
                   required_quantity: 1,
                   stock_levels: [
                     {
@@ -118,6 +118,14 @@ medusaIntegrationTestRunner({
           )
         ).data.cart
 
+        return { cart, offer, storeHeaders }
+      }
+
+      it("computes the cart total from the persisted offer price", async () => {
+        const { cart, offer, storeHeaders } = await createPricedCart(
+          "SERVER-TOTAL"
+        )
+
         const response = await api.post(
           `/store/carts/${cart.id}/line-items`,
           { offer_id: offer.id, quantity: 2 },
@@ -133,6 +141,30 @@ medusaIntegrationTestRunner({
         expect(response.data.cart).toMatchObject({
           subtotal: 8400,
           total: 8400,
+        })
+      })
+
+      it("refuses a client-supplied line-item price", async () => {
+        const { cart, offer, storeHeaders } = await createPricedCart(
+          "CLIENT-TOTAL"
+        )
+
+        await expect(
+          api.post(
+            `/store/carts/${cart.id}/line-items`,
+            { offer_id: offer.id, quantity: 2, unit_price: 1 },
+            storeHeaders
+          )
+        ).rejects.toMatchObject({ response: { status: 400 } })
+
+        const persisted = await api.get(
+          `/store/carts/${cart.id}`,
+          storeHeaders
+        )
+        expect(persisted.data.cart.items).toHaveLength(0)
+        expect(persisted.data.cart).toMatchObject({
+          subtotal: 0,
+          total: 0,
         })
       })
     })
