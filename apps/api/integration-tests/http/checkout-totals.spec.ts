@@ -167,6 +167,44 @@ medusaIntegrationTestRunner({
           total: 0,
         })
       })
+
+      it("a checkout with a tampered client total persists the server-computed total", async () => {
+        const { cart, offer, storeHeaders } = await createPricedCart(
+          "TAMPERED-TOTAL"
+        )
+
+        const pricedByServer = await api.post(
+          `/store/carts/${cart.id}/line-items`,
+          { offer_id: offer.id, quantity: 2 },
+          storeHeaders
+        )
+        expect(pricedByServer.data.cart).toMatchObject({
+          subtotal: 8400,
+          total: 8400,
+        })
+
+        await expect(
+          api.post(
+            `/store/carts/${cart.id}/line-items`,
+            { offer_id: offer.id, quantity: 2, unit_price: 1 },
+            storeHeaders
+          )
+        ).rejects.toMatchObject({ response: { status: 400 } })
+
+        const persisted = await api.get(
+          `/store/carts/${cart.id}`,
+          storeHeaders
+        )
+        expect(persisted.data.cart.items).toHaveLength(1)
+        expect(persisted.data.cart.items[0]).toMatchObject({
+          unit_price: 4200,
+          quantity: 2,
+        })
+        expect(persisted.data.cart).toMatchObject({
+          subtotal: 8400,
+          total: 8400,
+        })
+      })
     })
   },
 })
