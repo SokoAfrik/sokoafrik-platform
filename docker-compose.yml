@@ -1,0 +1,49 @@
+# The infrastructure SokoAfrik needs to run. Before this file there was no way to
+# bring the platform up at all outside the test harness, which boots it in-process
+# and deletes its database when the run ends — so the product had never existed
+# for longer than a test.
+#
+# This half is the stateful half: it keeps its data in named volumes, so the shop
+# you left yesterday is the shop you come back to. The applications themselves are
+# started by scripts/stack-up.sh, because apps/api and apps/storefront have no
+# Dockerfiles yet and inventing them is a separate piece of work with its own
+# failure modes. One command still brings everything up; see that script.
+#
+#   docker compose up -d      # postgres + redis, persistent
+#   ./scripts/stack-up.sh     # migrate, seed, start the API and the shop
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sokoafrik-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: sokoafrik
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - sokoafrik-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: sokoafrik-redis
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - sokoafrik-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  sokoafrik-pgdata:
+  sokoafrik-redisdata:
