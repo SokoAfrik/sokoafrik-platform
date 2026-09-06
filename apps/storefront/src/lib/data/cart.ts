@@ -416,11 +416,32 @@ export async function placeOrder(cartId?: string) {
     revalidatePath('/user/reviews');
     revalidatePath('/user/orders');
     removeCartId();
+
     // The completed cart splits into one order group (many per-seller orders).
-    // Send the shopper to the order-group detail page, which renders every
-    // child order + aggregated totals. `order_group.id` is always present;
-    // `orders[0].id` is not (the complete route omits `orders` from its fields).
-    redirect(`/user/orders/${res.data.order_group.id}`);
+    //
+    // A SIGNED-IN customer goes to the order-group detail page, which renders
+    // every child order and the aggregated totals.
+    //
+    // A GUEST cannot go there. /user/* is a PROTECTED_ROUTE, and the store
+    // order-groups endpoint authenticates a customer, so the guest whose
+    // payment had just been AUTHORISED was redirected into a login form — no
+    // order number, no confirmation, no receipt. That is the single worst
+    // moment in the whole shop to show someone a login wall, and it was the
+    // last thing standing between this storefront and a completed purchase.
+    // /store/orders/:id is readable without a session, so the guest goes to the
+    // public confirmation page this app already ships and never showed anyone.
+    const group = res.data.order_group as {
+      id: string;
+      orders?: Array<{ id: string }>;
+    };
+    const signedIn = Object.keys(headers).length > 0;
+    const firstOrderId = group.orders?.[0]?.id;
+
+    if (!signedIn && firstOrderId) {
+      redirect(`/order/${firstOrderId}/confirmed`);
+    }
+
+    redirect(`/user/orders/${group.id}`);
   }
 
   return res;

@@ -153,7 +153,13 @@ export async function middleware(request: NextRequest) {
 
   const regionMap = await getRegionMap(cacheId);
   const countryCode = regionMap && (await getCountryCode(request, regionMap));
-  const urlHasCountryCode = countryCode && pathname.split('/')[1].includes(countryCode);
+  // EXACT match, not substring. `includes` meant any first segment that merely
+  // CONTAINED the country code counted as already localized — and "order"
+  // contains "de". So /order/<id>/confirmed was never rewritten to
+  // /de/order/<id>/confirmed, and the order confirmation page 404'd for every
+  // German shopper. The bug is invisible until a route name happens to spell
+  // a country code inside it, which is why it survived this long.
+  const urlHasCountryCode = countryCode && pathname.split('/')[1] === countryCode;
 
   if (!urlHasCountryCode && countryCode) {
     const redirectPath = pathname === '/' ? '' : pathname;

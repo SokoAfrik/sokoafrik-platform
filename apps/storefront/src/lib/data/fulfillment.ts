@@ -28,7 +28,14 @@ export const listCartShippingMethods = async (cartId: string, is_return: boolean
         | null;
     }>)
     .then(({ shipping_options }) => flattenSellerShippingOptions(shipping_options))
-    .catch(() => {
+    .catch(err => {
+      // A SILENCED ERROR HERE IS INDISTINGUISHABLE FROM "THIS CART HAS NO
+      // DELIVERY OPTIONS", and the buyer sees an empty Delivery section either
+      // way. That cost a full afternoon of diagnosis: the API was returning two
+      // options the whole time and this catch was turning whatever went wrong
+      // into silence. Failing to fetch is not the same as having nothing, and
+      // the log line is what lets anyone tell the difference.
+      console.error('[fulfillment] could not list shipping options for cart', cartId, err);
       return null;
     });
 };
@@ -49,19 +56,33 @@ function flattenSellerShippingOptions(
     return null;
   }
 
-  const groups = Array.isArray(shipping_options)
-    ? [shipping_options]
-    : Object.values(shipping_options);
+  // THE SELLER ID IS THE KEY, NOT A FIELD. The endpoint answers with
+  // { shipping_options: { "sel_01...": [option, option] } } and the options
+  // themselves carry no seller object at all. Object.values() threw the keys
+  // away, so every option came out with seller_id and seller_name undefined —
+  // and the delivery section drops any group whose first option has no
+  // seller_name. Two real options were fetched, flattened, and then filtered
+  // into nothing, which the buyer saw as an empty Delivery step with no way to
+  // pay. Keep the key.
+  const groups: Array<[string | undefined, StoreCardShippingMethod[]]> =
+    Array.isArray(shipping_options)
+      ? [[undefined, shipping_options]]
+      : Object.entries(shipping_options);
 
-  return groups.flat().map(option => {
-    const seller = (option as { seller?: { id?: string; name?: string } }).seller;
-    return {
-      ...option,
-      seller_id: (option as { seller_id?: string }).seller_id ?? seller?.id,
-      seller_name:
-        (option as { seller_name?: string }).seller_name ?? seller?.name
-    } as StoreCardShippingMethod;
-  });
+  return groups.flatMap(([sellerIdFromKey, options]) =>
+    (options ?? []).map(option => {
+      const seller = (option as { seller?: { id?: string; name?: string } }).seller;
+      return {
+        ...option,
+        seller_id:
+          (option as { seller_id?: string }).seller_id ??
+          seller?.id ??
+          sellerIdFromKey,
+        seller_name:
+          (option as { seller_name?: string }).seller_name ?? seller?.name
+      } as StoreCardShippingMethod;
+    })
+  );
 }
 
 export const calculatePriceForShippingOption = async (

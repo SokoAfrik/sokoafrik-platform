@@ -153,8 +153,22 @@ const CartShippingMethodsSection: FC<ShippingProps> = ({ cart, availableShipping
   };
   const isEditEnabled = !isOpen && !!cart?.shipping_methods?.length;
 
+  // A seller's delivery options are shown because that seller HAS options, not
+  // because the endpoint happened to include a display name. Filtering on
+  // seller_name meant a missing name silently removed real, purchasable options
+  // from the page. The name is for the heading; fall back to the seller on the
+  // cart's own line items, and to a neutral label rather than dropping the group.
+  const sellerNameFromCart = new Map<string, string>(
+    ((cart?.items ?? []) as any[])
+      .map(i => [i?.offer?.seller?.id, i?.offer?.seller?.name])
+      .filter(([id, name]) => !!id && !!name) as Array<[string, string]>
+  );
+  const sellerLabel = (key: string) =>
+    groupedBySellerId?.[key]?.[0]?.seller_name ??
+    sellerNameFromCart.get(key) ??
+    'Seller';
   const filteredGroupedBySellerId = Object.keys(groupedBySellerId || {}).filter(
-    key => groupedBySellerId?.[key]?.[0]?.seller_name
+    key => (groupedBySellerId?.[key]?.length ?? 0) > 0
   );
 
   // The shipping method a seller currently has selected in the cart, matched by
@@ -219,7 +233,7 @@ const CartShippingMethodsSection: FC<ShippingProps> = ({ cart, availableShipping
                           level="h3"
                           className="mb-2"
                         >
-                          {groupedBySellerId[key][0].seller_name}
+                          {sellerLabel(key)}
                         </Heading>
                         <Listbox
                           value={selectedMethod?.shipping_option_id ?? null}
