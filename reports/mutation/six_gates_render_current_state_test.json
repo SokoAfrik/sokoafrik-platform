@@ -1,0 +1,26 @@
+{
+  "criterion": "six_gates_render_current_state_test",
+  "test": "six_gates_render_current_state_test",
+  "mutated_file": "apps/vendor/src/components/store-setup/onboarding-gates.ts",
+  "mutation": "sed -i \"s/completed: Boolean(metadata.phone_verified_at)/completed: true/\" apps/vendor/src/components/store-setup/onboarding-gates.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "six_gates_render_current_state_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "afc1d609b68e1f3f8ef10ecd820ae6d4d94e524128657f682f58262327deeabc",
+  "sha": "45d9a89f8311177a1e37f8a6f9e45ff023f92cb4",
+  "at": "2026-09-06T05:27:24.279516+02:00"
+}
