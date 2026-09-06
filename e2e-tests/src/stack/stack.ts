@@ -2,6 +2,7 @@ import { loadEnv } from "./env"
 import { createEphemeralDb, type EphemeralDb } from "./db"
 import { startMedusa, type MedusaHandle } from "./medusa"
 import { startDashboard, type DashboardHandle } from "./dashboard"
+import { startStorefront, type StorefrontHandle } from "./storefront"
 import { runSeed, DEFAULT_SEED_EXEC } from "./seed"
 import { ADMIN_HOST_DIR, VENDOR_HOST_DIR } from "./paths"
 
@@ -10,6 +11,11 @@ export interface StartStackOptions {
   // Defaults to the minimal login-only e2e seed; the docs guide generator
   // passes its own entry to seed the apps/api demo catalog.
   seedExec?: string
+  // Start apps/storefront as well. Off by default: the journeys suite only needs
+  // the two dashboards, and a Next.js cold build costs a minute the admin tests
+  // should not pay. The shop suite turns it on, and must seed a catalog — the
+  // login-only seed has no publishable key, so the storefront cannot authenticate.
+  withStorefront?: boolean
 }
 
 export interface Stack {
@@ -17,7 +23,8 @@ export interface Stack {
   admin: DashboardHandle
   vendor: DashboardHandle
   db: EphemeralDb
-  urls: { medusa: string; admin: string; vendor: string }
+  storefront?: StorefrontHandle
+  urls: { medusa: string; admin: string; vendor: string; storefront?: string }
   reseed: () => Promise<void>
   shutdownAll: () => Promise<void>
 }
@@ -65,8 +72,20 @@ export async function startStack(
     backendUrl: medusa.url,
   })
 
+  const storefront = options.withStorefront
+    ? await startStorefront({
+        port: await getPort({ exclude: [medusaPort, adminPort, vendorPort] }),
+        backendUrl: medusa.url,
+        databaseUrl: db.url,
+      })
+    : undefined
+
   const shutdownAll = async () => {
-    await Promise.allSettled([admin.close(), vendor.close()])
+    await Promise.allSettled([
+      admin.close(),
+      vendor.close(),
+      ...(storefront ? [storefront.close()] : []),
+    ])
     await medusa.shutdown()
     await db.drop()
   }
@@ -81,7 +100,13 @@ export async function startStack(
     admin,
     vendor,
     db,
-    urls: { medusa: medusa.url, admin: admin.url, vendor: vendor.url },
+    storefront,
+    urls: {
+      medusa: medusa.url,
+      admin: admin.url,
+      vendor: vendor.url,
+      ...(storefront ? { storefront: storefront.url } : {}),
+    },
     reseed,
     shutdownAll,
   }
