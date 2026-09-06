@@ -5,38 +5,26 @@ export const paymentInfoMap: Record<
   string,
   { title: string; icon: React.JSX.Element }
 > = {
-  "pp_card_stripe-connect": {
-    title: "Credit card",
+  // Sifalo Pay — the collection rail (decision 2026-08-24). One integration
+  // covering EVC Plus, ZAAD, eDahab, Sahal, Premier Wallet and Visa/Mastercard/
+  // Amex, as a hosted checkout the buyer is redirected to.
+  pp_sifalo_sifalo: {
+    title: "Mobile money or card",
     icon: <CreditCard />,
   },
-  pp_stripe_stripe: {
-    title: "Credit card",
-    icon: <CreditCard />,
-  },
-  "pp_stripe-ideal_stripe": {
-    title: "iDeal",
-    icon: <CreditCard />,
-  },
-  "pp_stripe-bancontact_stripe": {
-    title: "Bancontact",
-    icon: <CreditCard />,
-  },
-  pp_paypal_paypal: {
-    title: "PayPal",
-    icon: <CreditCard />,
-  },
+  // Medusa's no-op provider. Test and development only — it moves no money.
   pp_system_default: {
     title: "Manual Payment",
     icon: <Cash />,
   },
 }
 
-// This only checks if it is native stripe for card payments, it ignores the other stripe-based providers
-export const isStripe = (providerId?: string) => {
-  return providerId?.startsWith("pp_card_stripe-connect")
-}
-export const isPaypal = (providerId?: string) => {
-  return providerId?.startsWith("pp_paypal")
+// Stripe and PayPal entries removed 2026-09-06 along with the Stripe SDK.
+// Neither rail is usable in Somalia and neither was ever going to be used;
+// they were stock Mercur furniture that loaded a third party into every
+// buyer's checkout.
+export const isSifalo = (providerId?: string) => {
+  return providerId?.startsWith("pp_sifalo")
 }
 export const isManual = (providerId?: string) => {
   return providerId?.startsWith("pp_system_default")

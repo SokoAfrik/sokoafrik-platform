@@ -1,40 +1,20 @@
 "use client"
 
-import { loadStripe } from "@stripe/stripe-js"
 import React from "react"
 import { HttpTypes } from "@medusajs/types"
-import { isStripe } from "@/lib/constants"
-import StripeWrapper from "./StripeWrapper"
 
+// Stripe removed 2026-09-06. SokoAfrik collects through Sifalo Pay (decision
+// 2026-08-24) — EVC Plus, ZAAD, eDahab, Sahal, Premier Wallet and cards behind
+// one hosted checkout. Stripe was stock Mercur furniture for a rail this
+// business ruled out, and it loaded Stripe's SDK into every buyer's browser and
+// called m.stripe.com on every checkout. Sifalo is a redirect flow: there is no
+// card element to mount, so this wrapper has nothing to wrap.
 type PaymentWrapperProps = {
   cart: HttpTypes.StoreCart
   children: React.ReactNode
 }
 
-const stripeKey = process.env.NEXT_PUBLIC_STRIPE_KEY
-const stripePromise = stripeKey ? loadStripe(stripeKey) : null
-
-const PaymentWrapper: React.FC<PaymentWrapperProps> = ({ cart, children }) => {
-  const paymentSession = cart.payment_collection?.payment_sessions?.find(
-    (s) => s.status === "pending"
-  )
-
-  if (
-    isStripe(paymentSession?.provider_id) &&
-    paymentSession &&
-    stripePromise
-  ) {
-    return (
-      <StripeWrapper
-        paymentSession={paymentSession}
-        stripeKey={stripeKey}
-        stripePromise={stripePromise}
-      >
-        {children}
-      </StripeWrapper>
-    )
-  }
-
+const PaymentWrapper: React.FC<PaymentWrapperProps> = ({ children }) => {
   return <div>{children}</div>
 }
 

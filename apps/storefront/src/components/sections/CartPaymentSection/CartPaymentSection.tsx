@@ -11,10 +11,8 @@ import { Button } from '@/components/atoms';
 import ErrorMessage from '@/components/molecules/ErrorMessage/ErrorMessage';
 import { initiatePaymentSession } from '@/lib/data/cart';
 
-import { isStripe as isStripeFunc, paymentInfoMap } from '../../../lib/constants';
-import PaymentContainer, {
-  StripeCardContainer
-} from '../../organisms/PaymentContainer/PaymentContainer';
+import { isSifalo, paymentInfoMap } from '../../../lib/constants';
+import PaymentContainer from '../../organisms/PaymentContainer/PaymentContainer';
 
 type StoreCardPaymentMethod = any & {
   service_zone?: {
@@ -37,8 +35,6 @@ const CartPaymentSection = ({
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cardBrand, setCardBrand] = useState<string | null>(null);
-  const [cardComplete, setCardComplete] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
     activeSession?.provider_id ?? ''
   );
@@ -49,16 +45,16 @@ const CartPaymentSection = ({
 
   const isOpen = searchParams.get('step') === 'payment';
 
-  const isStripe = isStripeFunc(selectedPaymentMethod);
 
   const setPaymentMethod = async (method: string) => {
     setError(null);
     setSelectedPaymentMethod(method);
-    if (isStripeFunc(method)) {
-      await initiatePaymentSession(cart, {
-        provider_id: method
-      });
-    }
+    // Initiate for EVERY provider, not just one vendor's. The stripe-only
+    // branch left other providers without a session, which is why the review
+    // step could be reached with nothing to pay against.
+    await initiatePaymentSession(cart, {
+      provider_id: method
+    });
   };
 
   const paidByGiftcard = cart?.gift_cards && cart?.gift_cards?.length > 0 && cart?.total === 0;
@@ -84,8 +80,6 @@ const CartPaymentSection = ({
   const handleSubmit = async () => {
     setIsLoading(true);
     try {
-      const shouldInputCard = isStripeFunc(selectedPaymentMethod) && !activeSession;
-
       const checkActiveSession = activeSession?.provider_id === selectedPaymentMethod;
 
       if (!checkActiveSession) {
@@ -94,7 +88,7 @@ const CartPaymentSection = ({
         });
       }
 
-      if (!shouldInputCard) {
+      {
         return router.push(pathname + '?' + createQueryString('step', 'review'), {
           scroll: false
         });
@@ -144,22 +138,14 @@ const CartPaymentSection = ({
               >
                 {availablePaymentMethods.map(paymentMethod => (
                   <div key={paymentMethod.id}>
-                    {isStripeFunc(paymentMethod.id) ? (
-                      <StripeCardContainer
-                        paymentProviderId={paymentMethod.id}
-                        selectedPaymentOptionId={selectedPaymentMethod}
-                        paymentInfoMap={paymentInfoMap}
-                        setCardBrand={setCardBrand}
-                        setError={setError}
-                        setCardComplete={setCardComplete}
-                      />
-                    ) : (
-                      <PaymentContainer
-                        paymentInfoMap={paymentInfoMap}
-                        paymentProviderId={paymentMethod.id}
-                        selectedPaymentOptionId={selectedPaymentMethod}
-                      />
-                    )}
+                    {/* Every provider renders the same row. There is no card
+                        element to mount: Sifalo is a hosted redirect, so the
+                        buyer never types card details into our page. */}
+                    <PaymentContainer
+                      paymentInfoMap={paymentInfoMap}
+                      paymentProviderId={paymentMethod.id}
+                      selectedPaymentOptionId={selectedPaymentMethod}
+                    />
                   </div>
                 ))}
               </RadioGroup>
@@ -187,11 +173,9 @@ const CartPaymentSection = ({
             onClick={handleSubmit}
             variant="tonal"
             loading={isLoading}
-            disabled={(isStripe && !cardComplete) || (!selectedPaymentMethod && !paidByGiftcard)}
+            disabled={!selectedPaymentMethod && !paidByGiftcard}
           >
-            {!activeSession && isStripeFunc(selectedPaymentMethod)
-              ? ' Enter card details'
-              : 'Continue to review'}
+            Continue to review
           </Button>
         </div>
 
@@ -217,8 +201,8 @@ const CartPaymentSection = ({
                     {paymentInfoMap[selectedPaymentMethod]?.icon || <CreditCard />}
                   </Container>
                   <Text>
-                    {isStripeFunc(selectedPaymentMethod) && cardBrand
-                      ? cardBrand
+                    {isSifalo(selectedPaymentMethod)
+                      ? 'You will be taken to Sifalo to pay'
                       : 'Another step will appear'}
                   </Text>
                 </div>
