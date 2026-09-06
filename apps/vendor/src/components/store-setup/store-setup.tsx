@@ -1,75 +1,26 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Container, Text, clx } from "@medusajs/ui";
-import {
-  CheckCircleSolid,
-  TriangleDownMini,
-  CircleDottedLine,
-} from "@medusajs/icons";
+import { TriangleDownMini } from "@medusajs/icons";
 import { Collapsible as RadixCollapsible } from "radix-ui";
 
 import { SellerDTO } from "@mercurjs/types";
-
-type ProfileStep = {
-  key: string;
-  label: string;
-  completed: boolean;
-  path: string;
-};
-
-function getProfileSteps(seller: SellerDTO): ProfileStep[] {
-  const hasStoreDetails = !!(seller.name && seller.email && seller.description);
-
-  const hasAddress = !!(
-    seller.address &&
-    seller.address.address_1 &&
-    seller.address.city &&
-    seller.address.country_code
-  );
-
-  const hasCompanyDetails = !!(
-    seller.professional_details && seller.professional_details.corporate_name
-  );
-
-  const hasPaymentDetails = !!(
-    seller.payment_details &&
-    seller.payment_details.holder_name &&
-    seller.payment_details.country_code
-  );
-
-  return [
-    {
-      key: "store_details",
-      label: "Add store details",
-      completed: hasStoreDetails,
-      path: "/settings/store/edit",
-    },
-    {
-      key: "address",
-      label: "Add address",
-      completed: hasAddress,
-      path: "/settings/store/address",
-    },
-    {
-      key: "company_details",
-      label: "Add company details",
-      completed: hasCompanyDetails,
-      path: "/settings/store/professional-details",
-    },
-    {
-      key: "payment_details",
-      label: "Add payment details",
-      completed: hasPaymentDetails,
-      path: "/settings/store/payment-details",
-    },
-  ];
-}
+import { OnboardingChecklist } from "./onboarding-checklist";
+import { getOnboardingSteps } from "./onboarding-gates";
 
 const StoreSetup = ({ seller }: { seller: SellerDTO }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
 
-  const steps = useMemo(() => getProfileSteps(seller), [seller]);
+  const steps = useMemo(
+    () => getOnboardingSteps(seller).map((step) => ({
+      ...step,
+      label: t(step.labelKey),
+    })),
+    [seller, t],
+  );
 
   const completedCount = steps.filter((s) => s.completed).length;
   const totalCount = steps.length;
@@ -90,7 +41,7 @@ const StoreSetup = ({ seller }: { seller: SellerDTO }) => {
           <RadixCollapsible.Trigger asChild>
             <button className="flex w-full items-center justify-between">
               <Text size="large" weight="plus" leading="compact">
-                Complete store profile
+                {t("onboarding.title")}
               </Text>
               <TriangleDownMini
                 className={clx(
@@ -102,34 +53,13 @@ const StoreSetup = ({ seller }: { seller: SellerDTO }) => {
           </RadixCollapsible.Trigger>
 
           <RadixCollapsible.Content>
-            <div className="mt-4 flex flex-col gap-y-3">
-              {steps.map((step) => (
-                <button
-                  key={step.key}
-                  className="flex items-center gap-x-3 text-left"
-                  onClick={() => {
-                    if (!step.completed) {
-                      navigate(step.path);
-                    }
-                  }}
-                  disabled={step.completed}
-                >
-                  {step.completed ? (
-                    <CheckCircleSolid className="text-ui-tag-green-icon shrink-0" />
-                  ) : (
-                    <CircleDottedLine className="text-ui-fg-muted shrink-0" />
-                  )}
-                  <Text
-                    size="small"
-                    leading="compact"
-                    className={clx(
-                      step.completed ? "text-ui-fg-base" : "text-ui-fg-base",
-                    )}
-                  >
-                    {step.label}
-                  </Text>
-                </button>
-              ))}
+            <div className="mt-4">
+              <OnboardingChecklist
+                steps={steps}
+                completeLabel={t("onboarding.status.complete")}
+                incompleteLabel={t("onboarding.status.incomplete")}
+                onSelect={(step) => navigate(step.path)}
+              />
             </div>
           </RadixCollapsible.Content>
         </div>
