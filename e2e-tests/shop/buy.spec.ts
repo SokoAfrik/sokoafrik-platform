@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { readFileSync, writeFileSync } from "fs"
+import { execFileSync } from "child_process"
 import { STACK_STATE_FILE } from "../src/stack/paths"
 
 // THE CUSTOMER JOURNEY. Browse, choose, add to cart, check out, read the order
@@ -23,7 +24,7 @@ const buyer = {
 }
 
 test("a customer can browse, add to cart and reach a placed order", async ({ page }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(360_000)
   const base = shop()
   const reached: string[] = []
   const note = (s: string) => { reached.push(s); console.log(`[journey] ${s}`) }
@@ -141,41 +142,151 @@ test("a customer can browse, add to cart and reach a placed order", async ({ pag
 
   await test.step("choose a delivery option", async () => {
     await expect(page.getByRole("heading", { name: /delivery/i }).first()).toBeVisible()
-    const radios = page.getByRole("radio")
-    const n = await radios.count()
-    note(`delivery options offered: ${n}`)
-    if (n === 0) {
+    // NOT a radio group. Mercur renders one dropdown per SELLER, opened by a
+    // button reading "Choose delivery option". Counting radios here reported
+    // "0 options offered" while the options were on the page the whole time —
+    // a broken check reporting a defect that is not there. Drive the control a
+    // buyer actually sees.
+    const opener = page.getByRole("button", { name: /choose delivery option/i })
+    const sellers = await opener.count()
+    note(`delivery choosers on the page (one per seller): ${sellers}`)
+    if (sellers === 0) {
       const seen = await page.locator("main").ariaSnapshot().catch(() => "(no snapshot)")
       console.log(`[journey] DELIVERY SECTION AS RENDERED:\n${seen.slice(0, 3000)}`)
-      const shipReq = await page.evaluate(() => (window as any).__lastShipping ?? "n/a")
-      console.log(`[journey] (${shipReq})`)
     }
-    // THE WALL. The database has 10 shipping options across 5 service zones, the
-    // geo zone for "de" exists and carries Standard and Express Shipping, and the
-    // cart's saved address is de/Berlin — and the buyer is still offered nothing.
-    // So this is not missing seed data and not a wrong address; something between
-    // the cart and those options does not connect. Shipping PROFILE is the first
-    // suspect: there are two, and every option sits on one of them.
-    expect(n, "a buyer must be offered at least one delivery option — 10 exist in the database and none reach the cart").toBeGreaterThan(0)
-    await radios.first().check()
-    const next = page.getByRole("button", { name: /continue|next|save|proceed/i }).first()
-    if (await next.count()) { await next.click(); await page.waitForTimeout(3000) }
+    expect(sellers, "a buyer must be offered a way to choose delivery").toBeGreaterThan(0)
+
+    for (let i = 0; i < sellers; i++) {
+      await opener.nth(i).click()
+      await page.waitForTimeout(1200)
+      const opened = await page.locator("main").ariaSnapshot().catch(() => "(no snapshot)")
+      console.log(`[journey] DROPDOWN ${i} OPENED:\n${opened.slice(0, 3500)}`)
+      // Whatever the widget is built from, a buyer clicks the first row in it.
+      const byOption = page.getByRole("option")
+      const byRadio = page.getByRole("radio")
+      const byPrice = page.getByText(/Shipping|Express|Standard/i)
+      if (await byOption.count()) {
+        note(`dropdown ${i}: ${await byOption.count()} role=option rows`)
+        await byOption.first().click()
+      } else if (await byRadio.count()) {
+        note(`dropdown ${i}: ${await byRadio.count()} role=radio rows`)
+        await byRadio.first().check()
+      } else if (await byPrice.count()) {
+        note(`dropdown ${i}: falling back to a named shipping row`)
+        await byPrice.first().click()
+      } else {
+        throw new Error("the delivery dropdown opened but offered nothing to pick")
+      }
+      await page.waitForTimeout(2500)
+    }
     note("delivery chosen")
+
+    const next = page.getByRole("button", { name: /continue to payment/i }).first()
+    // The button is disabled until every seller has a method. If it stays
+    // disabled, the pick did not register — say so instead of timing out blind.
+    try {
+      await expect(next).toBeEnabled({ timeout: 25_000 })
+    } catch (e) {
+      const seen = await page.locator("main").ariaSnapshot().catch(() => "(no snapshot)")
+      console.log(`[journey] CONTINUE STAYED DISABLED AFTER PICKING. Page:\n${seen.slice(0, 3000)}`)
+      throw e
+    }
+    await next.click()
+    await page.waitForTimeout(4000)
+    note(`after continue the browser is at ${page.url()}`)
   })
 
   await test.step("pay and place the order", async () => {
-    await expect(page.getByRole("heading", { name: /payment/i }).first()).toBeVisible()
-    const pay = page.getByRole("button", { name: /place order|pay|complete/i }).first()
-    expect(await pay.count(), "there must be a control that places the order").toBeGreaterThan(0)
+    await expect(page.getByRole("heading", { name: /payment/i }).first()).toBeVisible({ timeout: 20_000 })
+    const seen = await page.locator("main").ariaSnapshot().catch(() => "(no snapshot)")
+    console.log(`[journey] PAYMENT SECTION AS RENDERED:\n${seen.slice(0, 4000)}`)
+
+    // Pick a payment method if the step offers a choice.
+    const methods = page.getByRole("radio")
+    if (await methods.count()) {
+      note(`payment methods offered: ${await methods.count()}`)
+      await methods.first().check()
+      await page.waitForTimeout(2000)
+    }
+    const contPay = page.getByRole("button", { name: /continue to review|continue|next/i }).first()
+    if (await contPay.count() && await contPay.isEnabled().catch(() => false)) {
+      await contPay.click()
+      await page.waitForTimeout(4000)
+      const rev = await page.locator("main").ariaSnapshot().catch(() => "(no snapshot)")
+      console.log(`[journey] REVIEW SECTION AS RENDERED:\n${rev.slice(0, 3000)}`)
+    }
+
+    const pay = page.getByRole("button", { name: /place order|pay now|complete order/i }).first()
+    const has = await pay.count()
+    expect(has, "there must be a control that places the order").toBeGreaterThan(0)
+    await expect(pay).toBeEnabled({ timeout: 20_000 })
     await pay.click()
-    await page.waitForTimeout(6000)
+    await page.waitForTimeout(10_000)
     note(`after placing the order the browser is at ${page.url()}`)
   })
 
   await test.step("the order is readable back", async () => {
+    // A URL is not a purchase. The order has to exist in the system of record
+    // carrying the buyer, the item and the delivery method they chose, and it
+    // has to be readable back to the person who placed it. Both halves assert.
+    // Two legitimate destinations: a signed-in customer gets the order-group
+    // page; a guest gets the public confirmation. Both are a placed order.
+    const ORDER_URL = new RegExp("(/user/orders/(og|order)_|/order/order_[A-Z0-9]+/confirmed)")
+    await expect(page).toHaveURL(ORDER_URL, { timeout: 30_000 })
+    const orderId = (page.url().match(/(og|order)_[A-Z0-9]+/) ?? [""])[0]
+    expect(orderId, "the browser must land on a real order id").not.toEqual("")
+    note(`order group id: ${orderId}`)
+
+    // --- the system of record ---
+    const state = JSON.parse(readFileSync(STACK_STATE_FILE, "utf8"))
+    const dbUrl = state.databaseUrl ?? process.env.DATABASE_URL ?? ""
+    if (!dbUrl) throw new Error("cannot verify the order: the stack did not record a database url")
+    // A query that errors must SAY so, not read as an empty result — an empty
+    // string here would let "no order" pass for "nothing to report".
+    const q = (label: string, sql: string) => {
+      let out: string
+      try {
+        out = execFileSync("psql", [dbUrl, "-tAF|", "-c", sql], { encoding: "utf8", stdio: ["ignore","pipe","pipe"] }).trim()
+      } catch (e: any) {
+        out = `QUERY FAILED: ${String(e.stderr ?? e.message).trim()}`
+      }
+      console.log(`[journey] ${label}:`)
+      console.log(out)
+      return out
+    }
+    const orders = q("ORDERS", `select id, status, currency_code, email from "order" order by created_at desc limit 3`)
+    // order_line_item carries the title and price; the quantity lives on the
+    // order_item join row, which is why a flat select on either one is wrong.
+    const items = q("ORDER ITEMS", `select li.title, oi.quantity, li.unit_price from order_item oi join order_line_item li on li.id = oi.item_id order by oi.created_at desc limit 5`)
+    const ship = q("SHIPPING METHODS", `select name, amount from order_shipping_method order by created_at desc limit 5`)
+    q("PAYMENT COLLECTIONS", `select id, amount, currency_code, status from payment_collection order by created_at desc limit 3`)
+    q("PAYMENTS", `select provider_id, amount, currency_code, captured_at from payment order by created_at desc limit 3`)
+
+    expect(orders, "an order must exist in the database after checkout").not.toEqual("")
+    expect(orders, "the order must carry the buyer's email").toContain(buyer.email)
+    expect(items, "the order must carry the item that was bought").toContain(productName.split(" ")[0])
+    expect(ship, "the order must carry the delivery method the buyer chose").not.toEqual("")
+
+    // --- readable back to the buyer ---
+    await page.waitForLoadState("networkidle").catch(() => {})
+    await page.waitForTimeout(5000)
     const body = await page.locator("body").innerText()
-    expect(body, "the order confirmation must name the order").toMatch(/order|thank/i)
-    note("order confirmation reached")
+    console.log(`[journey] ORDER PAGE URL ${page.url()} body length ${body.length}`)
+    console.log("[journey] ORDER PAGE TEXT >>>")
+    console.log(body.slice(0, 2000))
+    console.log("[journey] <<< END")
+    if (body.trim().length === 0) {
+      const snap = await page.locator("body").ariaSnapshot().catch(() => "(no snapshot)")
+      console.log(`[journey] ORDER PAGE RENDERED NOTHING. Tree:\n${snap.slice(0, 1500)}`)
+      const html = await page.content()
+      console.log(`[journey] ORDER PAGE HTML HEAD:\n${html.slice(0, 1500)}`)
+    }
+    expect(body.trim().length, "the page after checkout must show the buyer something").toBeGreaterThan(0)
+    expect(body, "a buyer whose payment was authorised must never be shown a login form").not.toMatch(/forgot your password|don't have an account/i)
+    expect(body, "the page must tell the buyer the order was placed").toMatch(/thank you|placed successfully|order confirmed/i)
+    expect(body, "the confirmation must name the buyer it was sent to").toContain(buyer.email)
+    note(`order ${orderId} placed and readable back`)
+    writeFileSync("/home/sokoafrik/journey-order-id.txt", orderId)
   })
 
   writeFileSync("/home/sokoafrik/journey-reached.txt", reached.join("\n"))

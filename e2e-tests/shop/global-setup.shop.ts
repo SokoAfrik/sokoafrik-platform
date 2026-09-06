@@ -16,7 +16,13 @@ export default async function globalSetup() {
     withStorefront: true,
   })
   globalThis.__SHOP_STACK__ = stack
-  writeFileSync(STACK_STATE_FILE, JSON.stringify(stack.urls, null, 2))
+  // The database url goes into the state file too: a test that claims a purchase
+  // happened has to be able to read the order back out of the system of record,
+  // not just off a redirect. The db is ephemeral and torn down with the stack.
+  writeFileSync(
+    STACK_STATE_FILE,
+    JSON.stringify({ ...stack.urls, databaseUrl: stack.db.url }, null, 2)
+  )
   console.log(
     `\n[shop] stack up:\n  medusa:     ${stack.urls.medusa}\n  storefront: ${stack.urls.storefront}\n`
   )
