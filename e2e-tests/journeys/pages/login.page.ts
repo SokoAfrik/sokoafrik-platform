@@ -12,8 +12,13 @@ export class LoginPage {
 
   constructor(private readonly page: Page) {
     this.emailInput = page.getByRole("textbox", { name: "Email" })
-    this.passwordInput = page.getByPlaceholder("Password")
-    this.submitButton = page.getByRole("button", { name: /continue with email/i })
+    // Medusa 2.18 renders a LABELLED password textbox with a "Show password" toggle beside it,
+    // not a placeholder, and the submit button says "Log in", not "Continue with email". Both
+    // locators were written against an older dashboard and had never been run — the browser
+    // filled Email and then timed out for 15s looking for a placeholder that does not exist.
+    // Role-based locators are what Playwright recommends and they survive copy changes better.
+    this.passwordInput = page.getByRole("textbox", { name: "Password" })
+    this.submitButton = page.getByRole("button", { name: /log in/i })
     this.errorMessage = page.getByRole("alert")
   }
 
