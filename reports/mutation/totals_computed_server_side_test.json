@@ -1,0 +1,26 @@
+{
+  "criterion": "totals_computed_server_side_test",
+  "test": "totals_computed_server_side_test",
+  "mutated_file": "packages/core/src/api/store/carts/[id]/line-items/validators.ts",
+  "mutation": "sed -i '/quantity: z.number().int().positive(),/a\\    unit_price: z.number().optional(),' 'packages/core/src/api/store/carts/[id]/line-items/validators.ts'",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "totals_computed_server_side_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "9068fb7138f88d76efb8a6c686cf6f6ef2bdd9061426b0ceb682b1713ca11d01",
+  "sha": "",
+  "at": "2026-09-06T04:04:42.256525+02:00"
+}

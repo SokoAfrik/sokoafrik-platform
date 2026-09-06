@@ -144,6 +144,44 @@ medusaIntegrationTestRunner({
         })
       })
 
+      it("totals_computed_server_side_test", async () => {
+        const { cart, offer, storeHeaders } = await createPricedCart(
+          "SERVER-AUTHORITY"
+        )
+
+        await expect(
+          api.post(
+            `/store/carts/${cart.id}/line-items`,
+            {
+              offer_id: offer.id,
+              quantity: 2,
+              unit_price: 1,
+            },
+            storeHeaders
+          )
+        ).rejects.toMatchObject({ response: { status: 400 } })
+
+        await api.post(
+          `/store/carts/${cart.id}/line-items`,
+          { offer_id: offer.id, quantity: 2 },
+          storeHeaders
+        )
+
+        const persisted = await api.get(
+          `/store/carts/${cart.id}`,
+          storeHeaders
+        )
+        expect(persisted.data.cart.items).toHaveLength(1)
+        expect(persisted.data.cart.items[0]).toMatchObject({
+          unit_price: 4200,
+          quantity: 2,
+        })
+        expect(persisted.data.cart).toMatchObject({
+          subtotal: 8400,
+          total: 8400,
+        })
+      })
+
       it("refuses a client-supplied line-item price", async () => {
         const { cart, offer, storeHeaders } = await createPricedCart(
           "CLIENT-TOTAL"
