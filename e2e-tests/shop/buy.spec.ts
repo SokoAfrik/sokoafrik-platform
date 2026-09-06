@@ -14,12 +14,12 @@ const shop = () => JSON.parse(readFileSync(STACK_STATE_FILE, "utf8")).storefront
 const buyer = {
   first: "Amina",
   last: "Warsame",
-  address: "Makka Al Mukarama Road 12",
+  address: "Kurfuerstendamm 1",
   postal: "10115",
-  city: "Mogadishu",
-  province: "Banaadir",
+  city: "Berlin",
+  province: "Berlin",
   email: "amina.warsame@sokoafrik.test",
-  phone: "+252612345678",
+  phone: "+491701234567",
 }
 
 test("a customer can browse, add to cart and reach a placed order", async ({ page }) => {
@@ -105,42 +105,37 @@ test("a customer can browse, add to cart and reach a placed order", async ({ pag
   })
 
   await test.step("fill the shipping address and save", async () => {
-    await page.locator('input[name="shipping_address.first_name"]').fill(buyer.first)
-    await page.locator('input[name="shipping_address.last_name"]').fill(buyer.last)
-    await page.locator('input[name="shipping_address.address_1"]').fill(buyer.address)
-    await page.locator('input[name="shipping_address.postal_code"]').fill(buyer.postal)
-    await page.locator('input[name="shipping_address.city"]').fill(buyer.city)
-    await page.locator('input[name="shipping_address.province"]').fill(buyer.province)
-    await page.locator('input[name="email"]').fill(buyer.email)
-    await page.locator('input[name="shipping_address.phone"]').fill(buyer.phone)
-    // THE DEFECT THIS JOURNEY FOUND. Pressing Save sends NOTHING to the store
-    // API. Recording every non-GET response during the click shows exactly one
-    // call leaving the browser — POST https://m.stripe.com/6, Stripe telemetry —
-    // and no request to /store/carts at all. Afterwards the fields are empty
-    // again and the URL is still ?step=address. The address is never persisted,
-    // so no delivery options can be computed, so Payment never opens, so there is
-    // no control anywhere that places an order.
-    //
-    // This is asserted HERE, at the first thing that is actually broken, rather
-    // than three steps later at "no delivery options" — that was the symptom.
+    // TYPE, DO NOT fill(). These are controlled React inputs whose onChange sets
+    // component state. fill() sets the DOM value and the box LOOKS right, but the
+    // component never sees it, so Save submits an empty form — which produced a
+    // confident and completely wrong finding that "checkout sends nothing to the
+    // store API". It does; it was being handed nothing to send. Typing character
+    // by character and tabbing out is what a buyer does and what the form reads.
+    const type = async (name: string, value: string) => {
+      const el = page.locator(`input[name="${name}"]`)
+      await el.click()
+      await el.pressSequentially(value, { delay: 15 })
+      await el.press("Tab")
+    }
+    await type("shipping_address.first_name", buyer.first)
+    await type("shipping_address.last_name", buyer.last)
+    await type("shipping_address.address_1", buyer.address)
+    await type("shipping_address.postal_code", buyer.postal)
+    await type("shipping_address.city", buyer.city)
+    await type("shipping_address.province", buyer.province)
+    await type("email", buyer.email)
+    await type("shipping_address.phone", buyer.phone)
     const wrote: string[] = []
     page.on("response", (r) => {
-      if (r.request().method() !== "GET" && /\/store\//.test(r.url())) {
-        wrote.push(`${r.request().method()} ${r.status()} ${r.url().slice(0, 80)}`)
-      }
+      if (r.request().method() !== "GET") wrote.push(`${r.request().method()} ${r.status()} ${r.url().slice(0, 70)}`)
     })
     await page.getByRole("button", { name: /^save$/i }).click()
     await page.waitForTimeout(8000)
-    note(`store-API writes made by Save: ${JSON.stringify(wrote)}`)
-    expect(
-      wrote.length,
-      "pressing Save must send the shipping address to the store API — it currently sends nothing, " +
-      "so the address is never persisted and checkout cannot continue"
-    ).toBeGreaterThan(0)
-    await expect(
-      page.locator('input[name="shipping_address.city"]'),
-      "the saved address must still be shown after saving"
-    ).toHaveValue(buyer.city)
+    note(`calls made by Save: ${JSON.stringify(wrote)}`)
+    // Saving posts a Next server action, which calls Medusa server-side; the
+    // browser never talks to /store directly here. The proof it worked is that
+    // the checkout advances off the address step.
+    await expect(page).toHaveURL(/step=delivery/, { timeout: 20_000 })
     note("address saved")
   })
 
@@ -155,7 +150,13 @@ test("a customer can browse, add to cart and reach a placed order", async ({ pag
       const shipReq = await page.evaluate(() => (window as any).__lastShipping ?? "n/a")
       console.log(`[journey] (${shipReq})`)
     }
-    expect(n, "a buyer must be offered at least one delivery option").toBeGreaterThan(0)
+    // THE WALL. The database has 10 shipping options across 5 service zones, the
+    // geo zone for "de" exists and carries Standard and Express Shipping, and the
+    // cart's saved address is de/Berlin — and the buyer is still offered nothing.
+    // So this is not missing seed data and not a wrong address; something between
+    // the cart and those options does not connect. Shipping PROFILE is the first
+    // suspect: there are two, and every option sits on one of them.
+    expect(n, "a buyer must be offered at least one delivery option — 10 exist in the database and none reach the cart").toBeGreaterThan(0)
     await radios.first().check()
     const next = page.getByRole("button", { name: /continue|next|save|proceed/i }).first()
     if (await next.count()) { await next.click(); await page.waitForTimeout(3000) }
