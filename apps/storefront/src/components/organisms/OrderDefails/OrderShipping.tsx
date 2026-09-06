@@ -8,7 +8,9 @@ type ShippingDetailsProps = {
 }
 
 const OrderShipping = ({ order }: ShippingDetailsProps) => {
-  const payment = order.payment_collections?.[0].payments?.[0]
+  // ?.[0].payments — the optional chain stopped one link short, so an order
+  // with an empty payment_collections array threw instead of rendering.
+  const payment = order.payment_collections?.[0]?.payments?.[0]
 
   return (
     <div className="border rounded-sm p-4">

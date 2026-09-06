@@ -23,7 +23,7 @@ const buyer = {
   phone: "+491701234567",
 }
 
-test("a customer can browse, add to cart and reach a placed order", async ({ page }) => {
+test("browse_cart_checkout_order_status_e2e_test — a customer can browse, add to cart, pay, and read the order back", async ({ page }) => {
   test.setTimeout(360_000)
   const base = shop()
   const reached: string[] = []
@@ -285,6 +285,20 @@ test("a customer can browse, add to cart and reach a placed order", async ({ pag
     expect(body, "a buyer whose payment was authorised must never be shown a login form").not.toMatch(/forgot your password|don't have an account/i)
     expect(body, "the page must tell the buyer the order was placed").toMatch(/thank you|placed successfully|order confirmed/i)
     expect(body, "the confirmation must name the buyer it was sent to").toContain(buyer.email)
+    // A receipt has to carry something the buyer can quote back to us. Thank-you
+    // alone is not an order status.
+    expect(body, "the confirmation must show an order number").toMatch(/order number/i)
+    // The item heading is CSS-uppercased, so innerText returns it in caps.
+    // Comparing case-sensitively failed on a receipt that was correct.
+    expect(body.toLowerCase(), "the confirmation must name what was bought").toContain(
+      productName.split(" ")[0].toLowerCase()
+    )
+    expect(body, "the confirmation must show the order status").toMatch(/order status/i)
+    const status = (await page.getByTestId("order-status").innerText().catch(() => "")).trim()
+    note(`order status shown to the buyer: "${status}"`)
+    expect(status, "the order status must have a value, not an empty label").not.toEqual("")
+    expect(status.toLowerCase(), "an unknown status is not a status").not.toEqual("unknown")
+    expect(body, "the confirmation must show a total").toMatch(/total/i)
     note(`order ${orderId} placed and readable back`)
     writeFileSync("/home/sokoafrik/journey-order-id.txt", orderId)
   })

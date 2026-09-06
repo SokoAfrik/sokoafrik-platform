@@ -37,6 +37,17 @@ export const OrderConfirmedSection = ({
               .
             </Text>
           </div>
+
+          {/* This page imported OrderDetails, OrderShipping, OrderItems and
+              OrderTotals and rendered NONE of them, so the receipt carried no
+              order number, no items, no address and no total — nothing a buyer
+              could quote to anyone. Render them. */}
+          <div className="flex flex-col gap-4 mt-6">
+            <OrderDetails order={order} showStatus />
+            <OrderItems order={order} />
+            <OrderShipping order={order} />
+            <OrderTotals totals={order as never} />
+          </div>
         </div>
       </div>
     </div>

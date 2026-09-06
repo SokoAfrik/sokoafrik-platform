@@ -8,7 +8,10 @@ type OrderDetailsProps = {
 }
 
 const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
-  const formatStatus = (str: string) => {
+  // Tolerates undefined: an order fetched without the status fields renders
+  // "Unknown" rather than throwing on .split, and a caller can see the gap.
+  const formatStatus = (str?: string | null) => {
+    if (!str) return "Unknown"
     const formatted = str.split("_").join(" ")
 
     return formatted.slice(0, 1).toUpperCase() + formatted.slice(1)
@@ -30,17 +33,23 @@ const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
             <Text>
               Order status:{" "}
               <span className="text-ui-fg-subtle " data-testid="order-status">
-                {/* TODO: Check where the statuses should come from */}
-                {/* {formatStatus(order.fulfillment_status)} */}
+                {/* Was commented out behind a TODO, so "Order status:" rendered
+                    with nothing after it on every order page in the shop. */}
+                {formatStatus(
+                  (order as { fulfillment_status?: string }).fulfillment_status ??
+                    order.status
+                )}
               </span>
             </Text>
             <Text>
               Payment status:{" "}
               <span
                 className="text-ui-fg-subtle "
-                sata-testid="order-payment-status"
+                data-testid="order-payment-status"
               >
-                {/* {formatStatus(order.payment_status)} */}
+                {formatStatus(
+                  (order as { payment_status?: string }).payment_status
+                )}
               </span>
             </Text>
           </>
