@@ -29,11 +29,12 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
 
   switch (true) {
     case isSifalo(paymentSession?.provider_id):
-      // Sifalo is a redirect: the button hands the cart to Medusa, which opens
-      // the hosted checkout. Nothing is confirmed in the browser — the order is
-      // paid only when OUR SERVER has called verify.php and seen "success".
       return (
-        <ManualTestPaymentButton notReady={notReady} data-testid={dataTestId} />
+        <SifaloPaymentButton
+          notReady={notReady}
+          checkoutUrl={String((paymentSession?.data as Record<string, unknown>)?.checkout_url ?? '')}
+          data-testid={dataTestId}
+        />
       )
     case isManual(paymentSession?.provider_id):
       return (
@@ -46,6 +47,57 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
         </Button>
       )
   }
+}
+
+/**
+ * Sifalo is a REDIRECT rail. This button does not place the order — it sends the
+ * buyer to the hosted checkout to pay with EVC Plus, ZAAD, eDahab, Sahal,
+ * Premier Wallet or a card. The order is placed when they come back and the
+ * SERVER has verified the payment.
+ *
+ * If the session carries no checkout url, the button refuses rather than
+ * pretending: sending someone to nowhere after they have chosen to pay is worse
+ * than telling them the payment method is not ready.
+ */
+const SifaloPaymentButton = ({
+  notReady,
+  checkoutUrl,
+  "data-testid": dataTestId,
+}: {
+  notReady: boolean
+  checkoutUrl: string
+  "data-testid"?: string
+}) => {
+  const [submitting, setSubmitting] = useState(false)
+
+  if (!checkoutUrl) {
+    return (
+      <>
+        <Button disabled className="w-full">
+          Payment is unavailable
+        </Button>
+        <ErrorMessage
+          error="This payment method did not open a checkout. Please choose another, or try again in a moment."
+          data-testid="sifalo-payment-error-message"
+        />
+      </>
+    )
+  }
+
+  return (
+    <Button
+      disabled={notReady}
+      loading={submitting}
+      className="w-full"
+      data-testid={dataTestId}
+      onClick={() => {
+        setSubmitting(true)
+        window.location.href = checkoutUrl
+      }}
+    >
+      Pay with mobile money or card
+    </Button>
+  )
 }
 
 const ManualTestPaymentButton = ({ notReady }: { notReady: boolean }) => {

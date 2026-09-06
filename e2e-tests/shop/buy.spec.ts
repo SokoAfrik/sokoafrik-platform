@@ -203,9 +203,19 @@ test("browse_cart_checkout_order_status_e2e_test — a customer can browse, add 
 
     // Pick a payment method if the step offers a choice.
     const methods = page.getByRole("radio")
+    const SIFALO = process.env.SIFALO_E2E === "1"
     if (await methods.count()) {
       note(`payment methods offered: ${await methods.count()}`)
-      await methods.first().check()
+      if (SIFALO) {
+        // Choose the real rail by its label, not by position — "the first one"
+        // would silently pass while testing the no-op provider.
+        const sifalo = page.getByText(/mobile money or card/i).first()
+        expect(await sifalo.count(), "the Sifalo option must be offered to the buyer").toBeGreaterThan(0)
+        await sifalo.click()
+        note("chose Sifalo")
+      } else {
+        await methods.first().check()
+      }
       await page.waitForTimeout(2000)
     }
     const contPay = page.getByRole("button", { name: /continue to review|continue|next/i }).first()
@@ -214,6 +224,31 @@ test("browse_cart_checkout_order_status_e2e_test — a customer can browse, add 
       await page.waitForTimeout(4000)
       const rev = await page.locator("main").ariaSnapshot().catch(() => "(no snapshot)")
       console.log(`[journey] REVIEW SECTION AS RENDERED:\n${rev.slice(0, 3000)}`)
+    }
+
+    if (SIFALO) {
+      // A REDIRECT RAIL, WALKED. The button does not place the order — it sends
+      // the buyer to the hosted checkout. They pay there and come back, and only
+      // then does our server verify and the order get placed.
+      const payBtn = page.getByRole("button", { name: /pay with mobile money or card/i }).first()
+      expect(await payBtn.count(), "the buyer needs a button that takes them to Sifalo").toBeGreaterThan(0)
+      await payBtn.click()
+      await page.waitForURL(/checkout\/\?key=|\/checkout\//, { timeout: 20_000 }).catch(() => {})
+      note(`after pressing pay the browser is at ${page.url()}`)
+      expect(page.url(), "the buyer must actually leave for the hosted checkout").toMatch(/key=key_test|checkout\//)
+      // The hosted checkout pays and sends them back.
+      await page.waitForURL(/sifalo-return|\/order\/|user\/orders/, { timeout: 30_000 })
+      note(`after paying the browser is at ${page.url()}`)
+      await page.waitForTimeout(8000)
+      note(`after the return settles the browser is at ${page.url()}`)
+      if (/sifalo-return/.test(page.url())) {
+        // Still on the return page means the confirmation did not complete. The
+        // page shows the buyer why; print it, because "the URL is wrong" is not
+        // a diagnosis.
+        const body = await page.locator("body").innerText()
+        console.log(`[journey] RETURN PAGE SAID:\n${body.slice(0, 1200)}`)
+      }
+      return
     }
 
     const pay = page.getByRole("button", { name: /place order|pay now|complete order/i }).first()
@@ -266,6 +301,20 @@ test("browse_cart_checkout_order_status_e2e_test — a customer can browse, add 
     expect(orders, "the order must carry the buyer's email").toContain(buyer.email)
     expect(items, "the order must carry the item that was bought").toContain(productName.split(" ")[0])
     expect(ship, "the order must carry the delivery method the buyer chose").not.toEqual("")
+
+    // THE MONEY MUST ACTUALLY BE AUTHORISED. An order can complete with its
+    // payment still "awaiting" — that is the correct behaviour for a deferred
+    // rail — but it is NOT a purchase, and a suite that accepts it would let an
+    // unpaid order read as a sale. This assertion was added because the run that
+    // first walked Sifalo end to end passed while the payment collection sat at
+    // "awaiting" and no payment row existed at all.
+    if (process.env.SIFALO_E2E === "1") {
+      const collections = q("PAYMENT COLLECTIONS", `select id, amount, currency_code, status from payment_collection order by created_at desc limit 3`)
+      expect(collections, "paying through Sifalo must leave an AUTHORIZED payment collection, not one still awaiting")
+        .toContain("authorized")
+      const payments = q("PAYMENTS", `select provider_id, amount, currency_code from payment order by created_at desc limit 3`)
+      expect(payments, "an authorised payment through Sifalo must exist and name the rail").toContain("sifalo")
+    }
 
     // --- readable back to the buyer ---
     await page.waitForLoadState("networkidle").catch(() => {})

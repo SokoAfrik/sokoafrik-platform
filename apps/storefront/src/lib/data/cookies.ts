@@ -74,7 +74,17 @@ export const setCartId = async (cartId: string) => {
   cookies.set('_medusa_cart_id', cartId, {
     maxAge: 60 * 60 * 24 * 7,
     httpOnly: true,
-    sameSite: 'strict',
+    // 'lax', NOT 'strict'. A Strict cookie is not sent on a cross-site top-level
+    // navigation — which is exactly what returning from a hosted payment page is.
+    // With Strict, a buyer who went to Sifalo, paid, and came back arrived with
+    // NO CART: the shop told them their basket had expired moments after taking
+    // their money. Found by walking the redirect in a browser, 2026-09-06.
+    //
+    // Lax still refuses to send this cookie on cross-site POSTs and subresource
+    // requests, and it is httpOnly, so the CSRF posture is materially unchanged —
+    // and it matches _medusa_jwt, which was already 'lax'. A redirect payment
+    // rail is impossible with Strict, and Sifalo is a redirect rail.
+    sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
   });
 };

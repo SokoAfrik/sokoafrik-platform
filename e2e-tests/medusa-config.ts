@@ -25,6 +25,7 @@ const SIFALO = process.env.SIFALO_USERNAME && process.env.SIFALO_KEY && process.
               key: process.env.SIFALO_KEY,
               returnUrl: process.env.SIFALO_RETURN_URL,
               ...(process.env.SIFALO_BASE_URL ? { baseUrl: process.env.SIFALO_BASE_URL } : {}),
+              ...(process.env.SIFALO_CHECKOUT_BASE_URL ? { checkoutBaseUrl: process.env.SIFALO_CHECKOUT_BASE_URL } : {}),
             },
           },
         ],

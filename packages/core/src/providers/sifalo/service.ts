@@ -22,7 +22,15 @@ export interface SifaloOptions {
   returnUrl: string
   /** Overridden in tests to point at a stub. Never set in production. */
   baseUrl?: string
+  /**
+   * Where the buyer is sent to pay. Read out of SokoAfrik's own working
+   * integration (soko-web-customer-Vendor/server.cjs), not invented:
+   *   https://pay.sifalo.com/checkout/?key=<key>&token=<token>
+   */
+  checkoutBaseUrl?: string
 }
+
+export const SIFALO_CHECKOUT_BASE = "https://pay.sifalo.com/checkout/"
 
 const toMinor = (amount: unknown): bigint => {
   // Medusa hands amounts as BigNumber-ish values in MAJOR units.
@@ -103,6 +111,9 @@ export class SifaloPaymentProvider extends AbstractPaymentProvider<SifaloOptions
       data: {
         sifalo_key: session.key,
         sifalo_token: session.token,
+        // Where to send the buyer. The storefront cannot build this itself
+        // without knowing Sifalo's host, and it should not have to.
+        checkout_url: `${this.options_.checkoutBaseUrl ?? SIFALO_CHECKOUT_BASE}?key=${encodeURIComponent(session.key!)}&token=${encodeURIComponent(session.token!)}`,
         order_ref: orderRef,
         expected_amount_minor: expectedMinor.toString(),
         currency,
@@ -193,9 +204,24 @@ export class SifaloPaymentProvider extends AbstractPaymentProvider<SifaloOptions
   }
 
   async updatePayment(input: UpdatePaymentInput): Promise<UpdatePaymentOutput> {
-    // The amount changed, so the session we opened is for the wrong figure.
-    // Re-open rather than silently keeping a stale expected amount.
-    return this.initiatePayment(input as unknown as InitiatePaymentInput)
+    const data = (input.data ?? {}) as Record<string, unknown>
+    const existing = String(data.expected_amount_minor ?? "")
+    const wanted = toMinor(input.amount).toString()
+
+    // ONLY re-open when the amount actually moved. Re-opening unconditionally
+    // discards `data` — including the `sid` the return route records — and
+    // Medusa calls this from updatePaymentSession, which is exactly what the
+    // return flow does. The first version did re-open every time, so the sid was
+    // wiped moments before authorization needed it and every Sifalo order
+    // completed as "awaiting payment" while looking, from the buyer's side, like
+    // a finished purchase.
+    if (existing && existing === wanted) {
+      return { data }
+    }
+
+    const reopened = await this.initiatePayment(input as unknown as InitiatePaymentInput)
+    // Carry anything already learned about this payment across the re-open.
+    return { data: { ...data, ...(reopened.data ?? {}) } }
   }
 
   async deletePayment(input: DeletePaymentInput): Promise<DeletePaymentOutput> {

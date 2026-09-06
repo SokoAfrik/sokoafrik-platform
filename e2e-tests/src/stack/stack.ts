@@ -11,6 +11,10 @@ export interface StartStackOptions {
   // Defaults to the minimal login-only e2e seed; the docs guide generator
   // passes its own entry to seed the apps/api demo catalog.
   seedExec?: string
+  // Fix the storefront's port up front. A redirect payment rail is configured
+  // with a return URL when Medusa boots, and Medusa boots before the storefront
+  // — so the port cannot be discovered later. The caller chooses it.
+  storefrontPort?: number
   // Start apps/storefront as well. Off by default: the journeys suite only needs
   // the two dashboards, and a Next.js cold build costs a minute the admin tests
   // should not pay. The shop suite turns it on, and must seed a catalog — the
@@ -41,6 +45,8 @@ export async function startStack(
   const medusaPort = await getPort()
   const adminPort = await getPort({ exclude: [medusaPort] })
   const vendorPort = await getPort({ exclude: [medusaPort, adminPort] })
+  const storefrontPort =
+    options.storefrontPort ?? (await getPort({ exclude: [medusaPort, adminPort, vendorPort] }))
   const adminOrigin = `http://localhost:${adminPort}`
   const vendorOrigin = `http://localhost:${vendorPort}`
 
@@ -74,7 +80,7 @@ export async function startStack(
 
   const storefront = options.withStorefront
     ? await startStorefront({
-        port: await getPort({ exclude: [medusaPort, adminPort, vendorPort] }),
+        port: storefrontPort,
         backendUrl: medusa.url,
         databaseUrl: db.url,
       })

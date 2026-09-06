@@ -16,6 +16,9 @@ import type { AddressInfo } from "node:net"
  */
 export type StubBehaviour =
   | { kind: "success"; amount: string }
+  // Charges exactly what it was asked for, which is what a real gateway does.
+  // The e2e journey uses this, because the cart total differs every run.
+  | { kind: "echo" }
   | { kind: "pending" }
   | { kind: "failure" }
   | { kind: "garbage" }        // a body we cannot read as any known status
@@ -30,6 +33,8 @@ export interface SifaloStub {
 
 export async function startSifaloStub(initial: StubBehaviour): Promise<SifaloStub> {
   let behaviour = initial
+  let lastReturnUrl = ""
+  let lastAmount = "0.00"
   const calls: { path: string; body: unknown }[] = []
 
   const server = http.createServer((req, res) => {
@@ -46,13 +51,30 @@ export async function startSifaloStub(initial: StubBehaviour): Promise<SifaloStu
       if (req.url?.startsWith("/gateway/verify.php")) {
         switch (behaviour.kind) {
           case "success": return json({ sid: "sid_test", account: "615000000", payment_type: "EDAHAB", amount: behaviour.amount, status: "success", code: 200 })
+          case "echo":    return json({ sid: "sid_test", account: "615000000", payment_type: "EVC", amount: lastAmount, status: "success", code: 200 })
           case "pending": return json({ sid: "sid_test", status: "pending", code: 102 })
           case "failure": return json({ sid: "sid_test", status: "failure", code: 400 })
           default:        return json({ nothing: "we recognise" })
         }
       }
+      // The hosted checkout the buyer is redirected to. The real one asks for a
+      // wallet number or a card; this one pays immediately and sends the buyer
+      // back the way Sifalo does — with a sid on the return URL.
+      if (req.url?.startsWith("/checkout/")) {
+        // The real gateway is told the return url when the session is opened,
+        // not when the buyer arrives at the checkout. Mirror that.
+        const back = lastReturnUrl
+        res.writeHead(200, { "Content-Type": "text/html" })
+        res.end(`<!doctype html><title>Sifalo (stub)</title>
+<h1>Sifalo</h1><p>Paying…</p>
+<a id="back" href="${back}${back.includes("?") ? "&" : "?"}sid=sid_test">continue</a>
+<script>setTimeout(function(){ document.getElementById("back").click() }, 300)</script>`)
+        return
+      }
       if (req.url?.startsWith("/gateway")) {
         if (behaviour.kind === "no_session") return json({ error: "declined" })
+        lastReturnUrl = String((body as Record<string, unknown>)?.return_url ?? "")
+        lastAmount = String((body as Record<string, unknown>)?.amount ?? "0.00")
         return json({ key: "key_test", token: "token_test" })
       }
       res.writeHead(404); res.end()

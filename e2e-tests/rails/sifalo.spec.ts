@@ -31,6 +31,19 @@ test("a checkout session is opened and carries the amount we asked for", async (
   } finally { await stub.close() }
 })
 
+test("the buyer is given somewhere to go — the checkout url, not just a token", async () => {
+  const stub = await startSifaloStub({ kind: "success", amount: "13.30" })
+  try {
+    const out = await provider(stub.url).initiatePayment({ amount: 13.3, currency_code: "usd", context: { session_id: "ref-2" } } as never)
+    const url = String(out.data?.checkout_url)
+    // The shape is not invented — it is SokoAfrik's own working integration:
+    // https://pay.sifalo.com/checkout/?key=<key>&token=<token>
+    expect(url).toContain("pay.sifalo.com/checkout/")
+    expect(url).toContain("key=key_test")
+    expect(url).toContain("token=token_test")
+  } finally { await stub.close() }
+})
+
 test("a gateway that will not open a session fails loudly, it does not return a broken session", async () => {
   const stub = await startSifaloStub({ kind: "no_session" })
   try {
