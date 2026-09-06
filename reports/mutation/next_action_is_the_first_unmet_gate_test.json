@@ -1,0 +1,26 @@
+{
+  "criterion": "next_action_is_the_first_unmet_gate_test",
+  "test": "next_action_is_the_first_unmet_gate_test",
+  "mutated_file": "apps/vendor/src/components/store-setup/onboarding-checklist.ts",
+  "mutation": "sed -i \"s/const nextAction = steps.find((step) => !step.completed);/const nextAction = [...steps].reverse().find((step) => !step.completed);/\" apps/vendor/src/components/store-setup/onboarding-checklist.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "next_action_is_the_first_unmet_gate_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "04d3e20cf7d2684f5a6dd4c213228b66d2573dcb7226a8aa54ae5d3a96d3899f",
+  "sha": "ed1fd9edc675762cd4bad7ffda76ac4525f99203",
+  "at": "2026-09-06T07:32:24.154044+02:00"
+}
