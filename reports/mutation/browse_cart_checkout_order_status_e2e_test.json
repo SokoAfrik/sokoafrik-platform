@@ -1,0 +1,33 @@
+{
+  "criterion": "browse_cart_checkout_order_status_e2e_test",
+  "test": "browse_cart_checkout_order_status_e2e_test \u2014 a customer can browse, add to cart, pay, and read the order back",
+  "suite": "e2e-tests/shop (playwright.shop.config.ts), real Chromium against a booted storefront + Medusa + ephemeral PostgreSQL",
+  "mutated_file": "apps/storefront/src/components/organisms/OrderDefails/OrderDetails.tsx",
+  "mutation": "the order status stops rendering \u2014 the exact state this component shipped in, commented out behind a TODO",
+  "clean": {
+    "exit": 0,
+    "counts": {
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "mutated": {
+    "exit": 1,
+    "counts": {
+      "passed": 0,
+      "failed": 1
+    },
+    "error": "Error: the order status must have a value, "
+  },
+  "restored": {
+    "exit": 0,
+    "counts": {
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "clean_sha256": "a714bdb8f386c232b0009d0663be080a92278d1f18512ba8cf66d66169ae0c9e",
+  "restored_sha256": "a714bdb8f386c232b0009d0663be080a92278d1f18512ba8cf66d66169ae0c9e",
+  "hash_binding": true,
+  "recorded_at": "2026-09-06T18:54:29Z"
+}
