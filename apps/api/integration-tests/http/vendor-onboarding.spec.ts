@@ -73,6 +73,7 @@ medusaIntegrationTestRunner({
           steps,
           completeLabel: "Complete",
           incompleteLabel: "Not complete",
+          nextActionLabel: "Next action",
         }))
 
         expect(steps).toHaveLength(6)
@@ -84,6 +85,73 @@ medusaIntegrationTestRunner({
         expect(markup).toContain('data-gate="bank_verified" data-status="incomplete"')
         expect(markup).toContain('data-gate="catalogue" data-status="complete"')
         Object.values(labels).forEach((label) => expect(markup).toContain(label))
+      })
+
+      it("next_action_is_the_first_unmet_gate_test", async () => {
+        const { seller, headers } = await createSellerUser(appContainer, {
+          email: "onboarding-next-action@test.com",
+          name: "Hodan Electronics",
+        })
+
+        await api.post(
+          `/vendor/sellers/${seller.id}/address`,
+          { city: "Mogadishu", country_code: "so" },
+          headers,
+        )
+        await api.post(
+          `/vendor/sellers/${seller.id}/payment-details`,
+          { holder_name: "Hodan Electronics", account_number: "TEST-002" },
+          headers,
+        )
+        await api.post(
+          `/vendor/sellers/${seller.id}`,
+          {
+            metadata: {
+              soko_onboarding: {
+                category: "electronics",
+                phone_verified_at: null,
+                terms_accepted_at: "2026-09-06T00:00:00.000Z",
+                terms_version: "v1",
+                current_terms_version: "v1",
+                bank_verified_at: null,
+                publishable_products: 0,
+                minimum_publishable_products: 3,
+              },
+            },
+          },
+          headers,
+        )
+
+        const response = await api.get(`/vendor/sellers/${seller.id}`, headers)
+        expect(response.status).toBe(200)
+
+        const steps = getOnboardingSteps(response.data.seller).map((step) => ({
+          ...step,
+          label: labels[step.key],
+        }))
+        const markup = renderToStaticMarkup(createElement(OnboardingChecklist, {
+          steps,
+          completeLabel: "Complete",
+          incompleteLabel: "Not complete",
+          nextActionLabel: "Next action",
+        }))
+
+        expect(steps.map(({ key, completed }) => ({ key, completed }))).toEqual([
+          { key: "profile", completed: true },
+          { key: "phone", completed: false },
+          { key: "terms", completed: true },
+          { key: "bank", completed: true },
+          { key: "bank_verified", completed: false },
+          { key: "catalogue", completed: false },
+        ])
+        expect(markup.match(/data-next-action="true"/g)).toHaveLength(1)
+        expect(markup).toContain(
+          'data-gate="phone" data-status="incomplete" data-next-action="true"',
+        )
+        expect(markup).toContain(
+          'aria-label="Verify your phone number: Not complete"',
+        )
+        expect(markup).toContain("Next action")
       })
     })
   },

@@ -58,6 +58,7 @@ const StoreSetup = ({ seller }: { seller: SellerDTO }) => {
                 steps={steps}
                 completeLabel={t("onboarding.status.complete")}
                 incompleteLabel={t("onboarding.status.incomplete")}
+                nextActionLabel={t("onboarding.status.nextAction")}
                 onSelect={(step) => navigate(step.path)}
               />
             </div>

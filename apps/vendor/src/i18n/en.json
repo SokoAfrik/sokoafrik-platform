@@ -8,7 +8,8 @@
     "title": "Complete store setup",
     "status": {
       "complete": "Complete",
-      "incomplete": "Not complete"
+      "incomplete": "Not complete",
+      "nextAction": "Next action"
     },
     "gates": {
       "profile": "Add your business name, category and city",

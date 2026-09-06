@@ -6,6 +6,7 @@ type OnboardingChecklistProps = {
   steps: Array<OnboardingStep & { label: string }>;
   completeLabel: string;
   incompleteLabel: string;
+  nextActionLabel: string;
   onSelect?: (step: OnboardingStep) => void;
 };
 
@@ -13,18 +14,27 @@ export function OnboardingChecklist({
   steps,
   completeLabel,
   incompleteLabel,
+  nextActionLabel,
   onSelect,
 }: OnboardingChecklistProps) {
+  const nextAction = steps.find((step) => !step.completed);
+
   return createElement(
     "ol",
     { className: "flex flex-col gap-y-3" },
     steps.map((step) => {
       const status = step.completed ? "complete" : "incomplete";
       const statusLabel = step.completed ? completeLabel : incompleteLabel;
+      const isNextAction = step === nextAction;
 
       return createElement(
         "li",
-        { key: step.key, "data-gate": step.key, "data-status": status },
+        {
+          key: step.key,
+          "data-gate": step.key,
+          "data-status": status,
+          "data-next-action": isNextAction ? "true" : undefined,
+        },
         createElement(
           "button",
           {
@@ -48,7 +58,7 @@ export function OnboardingChecklist({
           createElement(
             "span",
             { className: "ml-auto text-ui-fg-muted" },
-            statusLabel,
+            isNextAction ? nextActionLabel : statusLabel,
           ),
         ),
       );
