@@ -113,8 +113,34 @@ test("a customer can browse, add to cart and reach a placed order", async ({ pag
     await page.locator('input[name="shipping_address.province"]').fill(buyer.province)
     await page.locator('input[name="email"]').fill(buyer.email)
     await page.locator('input[name="shipping_address.phone"]').fill(buyer.phone)
+    // THE DEFECT THIS JOURNEY FOUND. Pressing Save sends NOTHING to the store
+    // API. Recording every non-GET response during the click shows exactly one
+    // call leaving the browser — POST https://m.stripe.com/6, Stripe telemetry —
+    // and no request to /store/carts at all. Afterwards the fields are empty
+    // again and the URL is still ?step=address. The address is never persisted,
+    // so no delivery options can be computed, so Payment never opens, so there is
+    // no control anywhere that places an order.
+    //
+    // This is asserted HERE, at the first thing that is actually broken, rather
+    // than three steps later at "no delivery options" — that was the symptom.
+    const wrote: string[] = []
+    page.on("response", (r) => {
+      if (r.request().method() !== "GET" && /\/store\//.test(r.url())) {
+        wrote.push(`${r.request().method()} ${r.status()} ${r.url().slice(0, 80)}`)
+      }
+    })
     await page.getByRole("button", { name: /^save$/i }).click()
-    await page.waitForTimeout(4000)
+    await page.waitForTimeout(8000)
+    note(`store-API writes made by Save: ${JSON.stringify(wrote)}`)
+    expect(
+      wrote.length,
+      "pressing Save must send the shipping address to the store API — it currently sends nothing, " +
+      "so the address is never persisted and checkout cannot continue"
+    ).toBeGreaterThan(0)
+    await expect(
+      page.locator('input[name="shipping_address.city"]'),
+      "the saved address must still be shown after saving"
+    ).toHaveValue(buyer.city)
     note("address saved")
   })
 
