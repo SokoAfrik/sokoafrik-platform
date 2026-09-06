@@ -1,0 +1,27 @@
+{
+  "criterion": "sifalo_verify_amount_mismatch_refused_test",
+  "test": "SUCCESS AT THE WRONG AMOUNT IS NOT PAID \u2014 this is the defect the old demo shipped",
+  "suite": "e2e-tests/rails (playwright.rails.config.ts) against a stub Sifalo gateway",
+  "mutated_file": "packages/core/src/providers/sifalo/client.ts",
+  "mutation": "isPaidCorrectly stops comparing the amount \u2014 the exact defect the old sifaloPay.cjs demo shipped",
+  "notes": [
+    "The mutation is applied to SOURCE and packages/core is REBUILT before every run, because the stack loads .medusa/server; a source-only change proves nothing.",
+    "The restore is content-based, not a git checkout - the file is new and untracked, so git restored nothing on the first attempt and reported success while the mutation stayed live. The recorded hash is what caught it."
+  ],
+  "clean": {
+    "passed": 10,
+    "failed": 0
+  },
+  "mutated": {
+    "passed": 9,
+    "failed": 1
+  },
+  "restored": {
+    "passed": 10,
+    "failed": 0
+  },
+  "clean_sha256": "d6547335b7221ad9108fb2d1bd468aee7541e77d223834042f46f78647b33f15",
+  "restored_sha256": "d6547335b7221ad9108fb2d1bd468aee7541e77d223834042f46f78647b33f15",
+  "hash_binding": true,
+  "recorded_at": "2026-09-06T20:24:19Z"
+}
