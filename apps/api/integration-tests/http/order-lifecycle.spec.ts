@@ -49,6 +49,54 @@ medusaIntegrationTestRunner({
         expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
       })
 
+      it("illegal_transition_refused_test", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "order-lifecycle-refusal-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "order-lifecycle-refusal-buyer@sokoafrik.test",
+          items: [{ title: "Lifecycle refusal item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Lifecycle refusal delivery", amount: 100 }],
+        })
+
+        for (const state of ["placed", "accepted", "cancelled"]) {
+          await expect(
+            api.post(
+              `/admin/orders/${order.id}/lifecycle`,
+              { state },
+              adminHeaders
+            )
+          ).rejects.toMatchObject({ response: { status: 400 } })
+        }
+
+        let persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBeUndefined()
+
+        const paid = await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          { state: "paid" },
+          adminHeaders
+        )
+        expect(paid.status).toBe(200)
+
+        for (const state of ["placed", "paid", "ready", "cancelled"]) {
+          await expect(
+            api.post(
+              `/admin/orders/${order.id}/lifecycle`,
+              { state },
+              adminHeaders
+            )
+          ).rejects.toMatchObject({ response: { status: 400 } })
+        }
+
+        persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("paid")
+      })
+
     })
   },
 })
