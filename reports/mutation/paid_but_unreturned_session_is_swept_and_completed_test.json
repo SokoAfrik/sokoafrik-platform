@@ -1,0 +1,26 @@
+{
+  "criterion": "paid_but_unreturned_session_is_swept_and_completed_test",
+  "test": "paid_but_unreturned_session_is_swept_and_completed_test",
+  "mutated_file": "apps/api/src/jobs/sweep-sifalo-payments.ts",
+  "mutation": "sed -i 's/toLowerCase() !== \"success\"/toLowerCase() !== \"never\"/' apps/api/src/jobs/sweep-sifalo-payments.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "paid_but_unreturned_session_is_swept_and_completed_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "90c3f59e918ab99f57e70503492abc14ce6affdfbfb79a1f18ed4225826d0dfa",
+  "sha": "bc390b26562bf2486fc982d60cfba93f7cdfd4f6",
+  "at": "2026-09-07T03:13:30.355343+02:00"
+}
