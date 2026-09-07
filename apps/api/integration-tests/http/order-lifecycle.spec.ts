@@ -141,6 +141,56 @@ medusaIntegrationTestRunner({
         expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
       })
 
+      it("state_change_is_audited_test", async () => {
+        const { user } = await createAdminUser(
+          dbConnection,
+          adminHeaders,
+          getContainer(),
+          { email: "order-lifecycle-audit-admin@sokoafrik.test" }
+        )
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "order-lifecycle-audit-buyer@sokoafrik.test",
+          items: [{ title: "Audited lifecycle item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Audited lifecycle delivery", amount: 100 }],
+        })
+
+        const before = Date.now()
+        await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          { state: "paid" },
+          adminHeaders
+        )
+        await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          { state: "accepted" },
+          adminHeaders
+        )
+
+        const persisted = await orderService.retrieveOrder(order.id)
+        const audit = persisted.metadata?.soko_lifecycle_audit as Array<{
+          from: string
+          to: string
+          actor_id: string
+          changed_at: string
+        }>
+
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("accepted")
+        expect(audit).toHaveLength(2)
+        expect(audit.map(({ from, to, actor_id }) => ({ from, to, actor_id })))
+          .toEqual([
+            { from: "placed", to: "paid", actor_id: user.id },
+            { from: "paid", to: "accepted", actor_id: user.id },
+          ])
+        for (const entry of audit) {
+          expect(Date.parse(entry.changed_at)).toBeGreaterThanOrEqual(before)
+          expect(Date.parse(entry.changed_at)).toBeLessThanOrEqual(Date.now())
+        }
+      })
+
     })
   },
 })

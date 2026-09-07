@@ -12,6 +12,13 @@ type LifecycleBody = {
   state?: unknown
 }
 
+type LifecycleAuditEntry = {
+  from: OrderLifecycleState
+  to: OrderLifecycleState
+  actor_id: string
+  changed_at: string
+}
+
 export async function POST(
   req: MedusaRequest<LifecycleBody>,
   res: MedusaResponse
@@ -32,10 +39,30 @@ export async function POST(
   }
 
   const state = nextOrderLifecycleState(current, req.body?.state)
+  const actorId = req.auth_context?.actor_id
+  if (!actorId) {
+    throw new MedusaError(
+      MedusaError.Types.UNAUTHORIZED,
+      "Order lifecycle changes require an authenticated actor"
+    )
+  }
+  const storedAudit = order.metadata?.soko_lifecycle_audit
+  const audit = Array.isArray(storedAudit)
+    ? (storedAudit as LifecycleAuditEntry[])
+    : []
   await orderService.updateOrders(order.id, {
     metadata: {
       ...(order.metadata ?? {}),
       soko_lifecycle_state: state,
+      soko_lifecycle_audit: [
+        ...audit,
+        {
+          from: current,
+          to: state,
+          actor_id: actorId,
+          changed_at: new Date().toISOString(),
+        },
+      ],
     },
   })
   const updated = await orderService.retrieveOrder(order.id)
