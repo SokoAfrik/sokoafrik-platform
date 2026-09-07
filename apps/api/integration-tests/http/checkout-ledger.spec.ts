@@ -34,6 +34,7 @@ medusaIntegrationTestRunner({
 
       })
       it.each([
+        { title: "capture_writes_balanced_journal_test", replayCount: 0 },
         { title: "split_legs_sum_to_zero_test", replayCount: 0 },
         { title: "replayed_capture_is_idempotent_test", replayCount: 2 },
       ])("$title", async ({ replayCount }) => {
