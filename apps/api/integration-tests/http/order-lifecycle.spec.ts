@@ -97,6 +97,50 @@ medusaIntegrationTestRunner({
         expect(persisted.metadata?.soko_lifecycle_state).toBe("paid")
       })
 
+      it("terminal_state_is_final_test", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "order-lifecycle-terminal-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "order-lifecycle-terminal-buyer@sokoafrik.test",
+          items: [{ title: "Terminal lifecycle item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Terminal lifecycle delivery", amount: 100 }],
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked", "delivered"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            adminHeaders
+          )
+        }
+
+        for (const state of [
+          "placed",
+          "paid",
+          "accepted",
+          "ready",
+          "picked",
+          "delivered",
+          "cancelled",
+        ]) {
+          await expect(
+            api.post(
+              `/admin/orders/${order.id}/lifecycle`,
+              { state },
+              adminHeaders
+            )
+          ).rejects.toMatchObject({ response: { status: 400 } })
+        }
+
+        const persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
+      })
+
     })
   },
 })

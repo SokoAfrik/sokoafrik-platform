@@ -1,0 +1,26 @@
+{
+  "criterion": "terminal_state_is_final_test",
+  "test": "terminal_state_is_final_test",
+  "mutated_file": "apps/api/src/lib/order-lifecycle.ts",
+  "mutation": "sed -i 's/  \"delivered\",/  \"delivered\",\\\\n  \"cancelled\",/' apps/api/src/lib/order-lifecycle.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "terminal_state_is_final_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "839f245d4896668bbc4261732ac2dd326b66490b707fc3638a7ba5241bbda37c",
+  "sha": "6b93fe3966280a16efdb819004e9d68ff47fc529",
+  "at": "2026-09-07T13:02:29.917922+02:00"
+}
