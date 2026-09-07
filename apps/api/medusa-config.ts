@@ -17,7 +17,7 @@ const SIFALO = process.env.SIFALO_USERNAME && process.env.SIFALO_KEY && process.
       options: {
         providers: [
           {
-            resolve: '@mercurjs/core/providers/sifalo',
+            resolve: './src/providers/sifalo',
             id: 'sifalo',
             options: {
               username: process.env.SIFALO_USERNAME,

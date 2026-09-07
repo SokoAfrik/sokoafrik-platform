@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { medusaIntegrationTestRunner } from "@medusajs/test-utils"
 import {
   IRegionModuleService,
@@ -14,15 +16,27 @@ import {
 } from "../../../../integration-tests/helpers/create-admin-user"
 import { createVendorProduct } from "../../../../integration-tests/helpers/create-product"
 import { createSellerUser } from "../../../../integration-tests/helpers/create-seller-user"
+import { MercurModules, SellerStatus } from "@mercurjs/types"
+import { sweepPaidSifaloSessions } from "../../src/jobs/sweep-sifalo-payments"
 
-jest.setTimeout(180 * 1000)
+jest.setTimeout(420 * 1000)
 
 medusaIntegrationTestRunner({
   inApp: true,
-  env: { MEDUSA_FF_PRODUCT_REQUEST: "false" },
-  testSuite: ({ api, getContainer }) => {
+  env: {
+    MEDUSA_FF_PRODUCT_REQUEST: "false",
+    SIFALO_USERNAME: "integration-user",
+    SIFALO_KEY: "integration-key",
+    SIFALO_RETURN_URL: "http://store.test/checkout/sifalo-return",
+    SIFALO_BASE_URL: "http://sifalo.test",
+    SIFALO_CHECKOUT_BASE_URL: "http://sifalo.test/checkout/",
+  },
+  testSuite: ({ api, getContainer, dbConnection }) => {
     describe("Checkout totals", () => {
-      const createPricedCart = async (fixture: string) => {
+      const createPricedCart = async (
+        fixture: string,
+        paymentProviderId = "pp_system_default"
+      ) => {
         const container: MedusaContainer = getContainer()
         const seller = await createSellerUser(container, {
           email: `${fixture}@sokoafrik.test`,
@@ -46,7 +60,7 @@ medusaIntegrationTestRunner({
         const link = container.resolve(ContainerRegistrationKeys.LINK)
         await link.create({
           [Modules.REGION]: { region_id: region.id },
-          [Modules.PAYMENT]: { payment_provider_id: "pp_system_default" },
+          [Modules.PAYMENT]: { payment_provider_id: paymentProviderId },
         })
 
         const stockLocation = (
@@ -118,7 +132,16 @@ medusaIntegrationTestRunner({
           )
         ).data.cart
 
-        return { cart, offer, storeHeaders }
+        return {
+          cart,
+          offer,
+          region,
+          salesChannel,
+          seller,
+          shippingProfile,
+          stockLocation,
+          storeHeaders,
+        }
       }
 
       it("computes the cart total from the persisted offer price", async () => {
@@ -242,6 +265,147 @@ medusaIntegrationTestRunner({
           subtotal: 8400,
           total: 8400,
         })
+      })
+
+      it("paid_but_unreturned_session_is_swept_and_completed_test", async () => {
+        for (const migration of ["001_ledger.sql", "016_escrow_accounts.sql"]) {
+          await dbConnection.raw(
+            readFileSync(
+              path.resolve(process.cwd(), "../../../soko-money/db", migration),
+              "utf8"
+            )
+          )
+        }
+
+        const container: MedusaContainer = getContainer()
+        const fixture = await createPricedCart("SIFALO-SWEEP", "pp_sifalo_sifalo")
+        const sellerModule: any = container.resolve(MercurModules.SELLER)
+        await sellerModule.updateSellers({
+          id: fixture.seller.seller.id,
+          status: SellerStatus.OPEN,
+        })
+
+        await api.post(
+          `/vendor/stock-locations/${fixture.stockLocation.id}/fulfillment-sets`,
+          { name: "Sifalo Sweep Fulfillment", type: "shipping" },
+          fixture.seller.headers
+        )
+        const fulfillmentSet = (
+          await api.get(
+            `/vendor/stock-locations/${fixture.stockLocation.id}?fields=*fulfillment_sets`,
+            fixture.seller.headers
+          )
+        ).data.stock_location.fulfillment_sets[0]
+        await api.post(
+          `/vendor/stock-locations/${fixture.stockLocation.id}/fulfillment-providers`,
+          { add: ["manual_manual"] },
+          fixture.seller.headers
+        )
+        const serviceZone = (
+          await api.post(
+            `/vendor/fulfillment-sets/${fulfillmentSet.id}/service-zones`,
+            {
+              name: "Sifalo Sweep Zone",
+              geo_zones: [{ type: "country", country_code: "us" }],
+            },
+            fixture.seller.headers
+          )
+        ).data.fulfillment_set.service_zones[0]
+        const shippingOption = (
+          await api.post(
+            "/vendor/shipping-options",
+            {
+              name: "Sifalo Sweep Shipping",
+              service_zone_id: serviceZone.id,
+              shipping_profile_id: fixture.shippingProfile.id,
+              provider_id: "manual_manual",
+              price_type: "flat",
+              type: {
+                label: "Standard",
+                description: "Standard shipping",
+                code: "standard",
+              },
+              prices: [{ currency_code: "usd", amount: 500 }],
+              rules: [{ attribute: "enabled_in_store", value: "true", operator: "eq" }],
+            },
+            fixture.seller.headers
+          )
+        ).data.shipping_option
+
+        await api.post(
+          `/store/carts/${fixture.cart.id}/line-items`,
+          { offer_id: fixture.offer.id, quantity: 1 },
+          fixture.storeHeaders
+        )
+        await api.post(
+          `/store/carts/${fixture.cart.id}/shipping-methods`,
+          { option_id: shippingOption.id },
+          fixture.storeHeaders
+        )
+
+        const requests: Record<string, unknown>[] = []
+        const fetchSpy = jest.spyOn(global, "fetch").mockImplementation(
+          async (_url: string | URL | Request, init?: RequestInit) => {
+            const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+            requests.push(body)
+            if (body.gateway === "checkout") {
+              return new Response(JSON.stringify({ key: "key-1", token: "token-1" }))
+            }
+            return new Response(
+              JSON.stringify({
+                sid: "sid-paid-without-return",
+                amount: "47.00",
+                status: "success",
+                code: 601,
+              })
+            )
+          }
+        )
+
+        try {
+          const collection = (
+            await api.post(
+              "/store/payment-collections",
+              { cart_id: fixture.cart.id },
+              fixture.storeHeaders
+            )
+          ).data.payment_collection
+          const initializedCollection = (
+            await api.post(
+              `/store/payment-collections/${collection.id}/payment-sessions`,
+              { provider_id: "pp_sifalo_sifalo" },
+              fixture.storeHeaders
+            )
+          ).data.payment_collection
+          const session = initializedCollection.payment_sessions.find(
+            (candidate: Record<string, unknown>) =>
+              candidate.provider_id === "pp_sifalo_sifalo"
+          )
+
+          expect(session.data.sid).toBeUndefined()
+          const swept = await sweepPaidSifaloSessions(container, { minimumAgeMs: 0 })
+
+          expect(swept.failures).toEqual([])
+          expect(swept.completed).toHaveLength(1)
+          expect(swept.completed[0]).toMatchObject({ cartId: fixture.cart.id })
+          const { data: orderGroups } = await container
+            .resolve(ContainerRegistrationKeys.QUERY)
+            .graph({
+              entity: "order_group",
+              fields: ["id", "cart_id", "orders.id"],
+              filters: { id: swept.completed[0].orderGroupId },
+            })
+          expect(orderGroups).toHaveLength(1)
+          expect(orderGroups[0]).toMatchObject({ cart_id: fixture.cart.id })
+          expect(orderGroups[0].orders).toHaveLength(1)
+          expect(requests).toEqual([
+            expect.objectContaining({ gateway: "checkout", order_id: expect.any(String) }),
+            { order_id: expect.any(String) },
+            { sid: "sid-paid-without-return" },
+          ])
+        } finally {
+          fetchSpy.mockRestore()
+        }
       })
     })
   },
