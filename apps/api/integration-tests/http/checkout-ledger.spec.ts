@@ -34,10 +34,11 @@ medusaIntegrationTestRunner({
 
       })
       it.each([
-        { title: "capture_writes_balanced_journal_test", replayCount: 0 },
-        { title: "split_legs_sum_to_zero_test", replayCount: 0 },
-        { title: "replayed_capture_is_idempotent_test", replayCount: 2 },
-      ])("$title", async ({ replayCount }) => {
+        { title: "capture_writes_balanced_journal_test", replayCount: 0, preCaptureOnly: false },
+        { title: "split_legs_sum_to_zero_test", replayCount: 0, preCaptureOnly: false },
+        { title: "replayed_capture_is_idempotent_test", replayCount: 2, preCaptureOnly: false },
+        { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true },
+      ])("$title", async ({ replayCount, preCaptureOnly }) => {
         const container: MedusaContainer = getContainer()
         const sellerResult = await createSellerUser(container, {
           email: "ledger-capture@sokoafrik.test",
@@ -214,6 +215,23 @@ medusaIntegrationTestRunner({
           fields: ["orders.cart.payment_collection.payments.id"],
           filters: { id: completed.data.order_group.id },
         })
+        if (preCaptureOnly) {
+          await expect(
+            writeCapturedOrderToLedger(container, completed.data.order_group.id)
+          ).rejects.toThrow("captured amount must be positive")
+
+          const withoutConfirmedCapture = await dbConnection.raw(`
+            SELECT
+              (SELECT count(*)::int FROM ledger_transfers) AS transfers,
+              (SELECT count(*)::int FROM ledger_entries) AS entries
+          `)
+          expect(withoutConfirmedCapture.rows[0]).toEqual({
+            transfers: 0,
+            entries: 0,
+          })
+          return
+        }
+
         const paymentId = (orderGroups[0] as any)
           .orders[0].cart.payment_collection.payments[0].id
         const captured = await api.post(
