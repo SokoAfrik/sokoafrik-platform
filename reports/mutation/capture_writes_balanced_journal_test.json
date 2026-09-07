@@ -1,0 +1,26 @@
+{
+  "criterion": "capture_writes_balanced_journal_test",
+  "test": "capture_writes_balanced_journal_test",
+  "mutated_file": "apps/api/src/workflows/hooks/write-capture-ledger.ts",
+  "mutation": "sed -i \"s/reason: \\\"capture\\\"/reason: \\\"capture-broken\\\"/g\" apps/api/src/workflows/hooks/write-capture-ledger.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "capture_writes_balanced_journal_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "c84f3365034d4835efcbaecb40ac8eba6232cf0f91935ec922bc798e88f3791e",
+  "sha": "1753926331af699c42295eaf74cd47c43c467ccd",
+  "at": "2026-09-07T10:31:26.721371+02:00"
+}
