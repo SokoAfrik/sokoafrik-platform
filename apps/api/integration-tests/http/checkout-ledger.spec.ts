@@ -34,11 +34,12 @@ medusaIntegrationTestRunner({
 
       })
       it.each([
-        { title: "capture_writes_balanced_journal_test", replayCount: 0, preCaptureOnly: false },
-        { title: "split_legs_sum_to_zero_test", replayCount: 0, preCaptureOnly: false },
-        { title: "replayed_capture_is_idempotent_test", replayCount: 2, preCaptureOnly: false },
-        { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true },
-      ])("$title", async ({ replayCount, preCaptureOnly }) => {
+        { title: "capture_writes_balanced_journal_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false },
+        { title: "capture_journal_records_order_identity_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true },
+        { title: "split_legs_sum_to_zero_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false },
+        { title: "replayed_capture_is_idempotent_test", replayCount: 2, preCaptureOnly: false, assertOrderIdentity: false },
+        { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true, assertOrderIdentity: false },
+      ])("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity }) => {
         const container: MedusaContainer = getContainer()
         const sellerResult = await createSellerUser(container, {
           email: "ledger-capture@sokoafrik.test",
@@ -262,7 +263,7 @@ medusaIntegrationTestRunner({
         )
 
         const journal = await dbConnection.raw(`
-          SELECT e.transfer_id::text, e.amount_minor::text, e.currency::text, e.reason,
+          SELECT e.transfer_id::text, e.amount_minor::text, e.currency::text, e.reason, e.meta,
                  a.kind::text
             FROM ledger_entries e
             JOIN ledger_accounts a ON a.id = e.account_id
@@ -287,6 +288,21 @@ medusaIntegrationTestRunner({
           (sum: bigint, row: any) => sum + BigInt(row.amount_minor),
           0n
         )).toBe(0n)
+        if (assertOrderIdentity) {
+          const orderIds = (orderGroups[0] as any).orders.map((order: any) => order.id)
+          expect(journal.rows).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              meta: {
+                order_group_id: completed.data.order_group.id,
+                order_ids: orderIds,
+              },
+            }),
+          ]))
+          expect(journal.rows.every((row: any) => (
+            row.meta.order_group_id === completed.data.order_group.id
+            && JSON.stringify(row.meta.order_ids) === JSON.stringify(orderIds)
+          ))).toBe(true)
+        }
       })
     })
   },
