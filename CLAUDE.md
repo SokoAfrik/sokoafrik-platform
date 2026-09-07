@@ -173,3 +173,25 @@ Before ending a session:
 3. Record any unresolved risk or blocker.
 4. Commit with a descriptive message once the work is in a safe state.
 5. Leave the repo clean enough for the next session
+
+## REACHABILITY OUTRANKS PROOF (2026-09-07)
+
+No milestone may be accepted while this product is unreachable. A stale reachability
+verdict is RED. A venture with no probe scores nothing.
+
+The verdict lives in the vault at `99 Meta/reachability.json`, refreshed by the HQ
+runner every tick. It carries `generated_at` and `stale_after_ms`; read it, and if it
+is older than that limit treat every verdict inside as RED. A verdict that stopped
+being refreshed is not a passing verdict, it is an absent one.
+
+This exists because the portfolio reached 52% of its checklist with 0% of it running
+anywhere. Every proof to that point ran inside a test container, and a test container
+cannot tell a working product from a repository. Nothing was faked — the ordering was
+wrong. An ordering tuned for visible progress reliably produces visible progress
+instead of a working product.
+
+The probe asserts on CONTENT, not status: a 200 that renders an empty catalogue is a
+failure dressed as a success.
+
+Live now: shop https://sokoafrik.138-201-13-182.nip.io , api https://api.138-201-13-182.nip.io
+

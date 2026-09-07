@@ -11,6 +11,25 @@ import {
   type CreateProductDTO,
 } from "@mercurjs/types";
 import { seedCatalog } from "./seed-catalog";
+
+// --- SokoAfrik: market configuration (HQ, 2026-09-07) -------------------------
+// The upstream seed hardcodes Europe/EUR. Production is Somalia/USD: the money
+// layer settles in USD (the withdrawal caps Ahmed signed off are USD) and the
+// collection rail is Somali, so a shop priced in euros cannot take a real order.
+//
+// The three facts that differ are read from the environment, and the DEFAULTS
+// REPRODUCE THE ORIGINAL BEHAVIOUR EXACTLY, so the e2e harness — which seeds
+// de/eur and asserts against it — is untouched by this change.
+//
+// Products and shipping options are already priced in BOTH eur and usd upstream,
+// so no price rewrite is needed; only which currency the region settles in.
+const SEED_COUNTRIES = (process.env.SEED_COUNTRIES || "gb,de,dk,se,fr,es,it")
+  .split(",").map((c) => c.trim().toLowerCase()).filter(Boolean);
+const SEED_CURRENCY = (process.env.SEED_CURRENCY || "eur").toLowerCase();
+const SEED_REGION_NAME = process.env.SEED_REGION_NAME || "Europe";
+const SEED_SECONDARY_CURRENCY = SEED_CURRENCY === "usd" ? "eur" : "usd";
+// -----------------------------------------------------------------------------
+
 import {
   approveSellerWorkflow,
   createOffersWorkflow,
@@ -75,7 +94,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
   const salesChannelModuleService = container.resolve(Modules.SALES_CHANNEL);
   const storeModuleService = container.resolve(Modules.STORE);
 
-  const countries = ["gb", "de", "dk", "se", "fr", "es", "it"];
+  const countries = SEED_COUNTRIES;
 
   logger.info("Seeding store data...");
   const [store] = await storeModuleService.listStores();
@@ -102,13 +121,8 @@ export default async function seedDemoData({ container }: ExecArgs) {
     input: {
       store_id: store.id,
       supported_currencies: [
-        {
-          currency_code: "eur",
-          is_default: true,
-        },
-        {
-          currency_code: "usd",
-        },
+        { currency_code: SEED_CURRENCY, is_default: true },
+        { currency_code: SEED_SECONDARY_CURRENCY },
       ],
     },
   });
@@ -150,8 +164,8 @@ export default async function seedDemoData({ container }: ExecArgs) {
       input: {
         regions: [
           {
-            name: "Europe",
-            currency_code: "eur",
+            name: SEED_REGION_NAME,
+            currency_code: SEED_CURRENCY,
             countries: unassignedCountries,
             payment_providers: ["pp_system_default"],
           },
@@ -164,8 +178,8 @@ export default async function seedDemoData({ container }: ExecArgs) {
       input: {
         regions: [
           {
-            name: "Europe",
-            currency_code: "eur",
+            name: SEED_REGION_NAME,
+            currency_code: SEED_CURRENCY,
             countries,
             payment_providers: ["pp_system_default"],
           },
@@ -524,7 +538,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
         seller: {
           name: sellerConfig.name,
           email: sellerConfig.email,
-          currency_code: "eur",
+          currency_code: SEED_CURRENCY,
           description: `${sellerConfig.name} — a demo marketplace footwear seller.`,
           logo: sellerLogo(sellerConfig.name),
           banner: sellerBanner(sellerConfig.name),

@@ -110,7 +110,9 @@ export default async function seedReviews({ container }: ExecArgs) {
       { email: "liam.reviewer@mercur.dev", first_name: "Liam", last_name: "Meyer" },
       { email: "sofia.reviewer@mercur.dev", first_name: "Sofia", last_name: "Rossi" },
     ])
-    customers = created.map((c) => ({ id: c.id }))
+      // query.graph above selects only "id", so the inferred full entity type
+      // overstates what was fetched; nothing here reads any other field.
+    customers = created.map((c) => ({ id: c.id })) as unknown as typeof customers
   }
 
   const { data: products } = await query.graph({
@@ -158,7 +160,9 @@ export default async function seedReviews({ container }: ExecArgs) {
         )
       }
     }
-    orders = seeded.map((o) => ({ id: o.id }))
+      // query.graph above selects only "id", so the inferred full entity type
+      // overstates what was fetched; nothing here reads any other field.
+    orders = seeded.map((o) => ({ id: o.id })) as unknown as typeof orders
   }
 
   const pickCustomer = (i: number) => customers[i % customers.length].id
