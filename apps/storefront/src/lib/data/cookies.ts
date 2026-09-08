@@ -1,5 +1,6 @@
 import 'server-only';
 import { cookies as nextCookies } from 'next/headers';
+import { medusaAuthorization } from '../helpers/token';
 
 export const getAuthHeaders = async (): Promise<
   { authorization: string } | {}
@@ -11,7 +12,7 @@ export const getAuthHeaders = async (): Promise<
     return {};
   }
 
-  return { authorization: `Bearer ${token}` };
+  return medusaAuthorization(token);
 };
 
 export const getCacheTag = async (

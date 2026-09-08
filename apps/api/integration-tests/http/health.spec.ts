@@ -3,6 +3,7 @@ import {
   adminHeaders,
   createAdminUser,
 } from "../../../../integration-tests/helpers/create-admin-user"
+import { medusaAuthorization } from "../../../storefront/src/lib/helpers/token"
 
 jest.setTimeout(180 * 1000)
 
@@ -54,6 +55,38 @@ medusaIntegrationTestRunner({
         })
         expect(currentUser.status).toEqual(200)
         expect(currentUser.data.user).toMatchObject({ id: user.id, email })
+      })
+
+      it("auth_token_shape_accepted_by_medusa_test", async () => {
+        const email = "app-token-shape@sokoafrik.test"
+        const password = "somepassword"
+        const { user } = await createAdminUser(
+          dbConnection,
+          adminHeaders,
+          getContainer(),
+          { email }
+        )
+
+        const login = await api.post("/auth/user/emailpass", { email, password })
+        const token = login.data.token
+
+        expect(login.status).toEqual(200)
+        expect(token).toEqual(expect.any(String))
+        expect(token).not.toMatch(/^Bearer\s/i)
+        expect(token.split(".")).toHaveLength(3)
+
+        const rawToken = await api
+          .get("/admin/users/me", {
+            headers: { authorization: token },
+          })
+          .catch((error) => error.response)
+        expect(rawToken.status).toEqual(401)
+
+        const appShapedToken = await api.get("/admin/users/me", {
+          headers: medusaAuthorization(token),
+        })
+        expect(appShapedToken.status).toEqual(200)
+        expect(appShapedToken.data.user).toMatchObject({ id: user.id, email })
       })
     })
   },

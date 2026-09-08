@@ -8,6 +8,10 @@ const decodeJwt = (token: string) => {
   }
 };
 
+export const medusaAuthorization = (token: string) => ({
+  authorization: `Bearer ${token}`
+});
+
 export const isTokenExpired = (token: string | null) => {
   if (!token) return true;
 
