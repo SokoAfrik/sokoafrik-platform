@@ -1,0 +1,26 @@
+{
+  "criterion": "auth_token_shape_accepted_by_medusa_test",
+  "test": "auth_token_shape_accepted_by_medusa_test",
+  "mutated_file": "apps/storefront/src/lib/helpers/token.ts",
+  "mutation": "sed -i 's/Bearer /Token /' apps/storefront/src/lib/helpers/token.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "auth_token_shape_accepted_by_medusa_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "82db27b49a59b5a22bb8d67131941f7594c5c22f0aef7beec5f42c9f207b3aef",
+  "sha": "3c4d385c09c64b586ad1b6cf06e69e2f16b16b89",
+  "at": "2026-09-08T16:59:59.057099+02:00"
+}
