@@ -24,7 +24,7 @@ medusaIntegrationTestRunner({
   testSuite: ({ api, getContainer, dbConnection }) => {
     describe("Checkout ledger capture", () => {
       beforeEach(async () => {
-        for (const migration of ["001_ledger.sql", "016_escrow_accounts.sql"]) {
+        for (const migration of ["001_ledger.sql", "016_escrow_accounts.sql", "028_vendor_identity.sql"]) {
           const sql = readFileSync(
             path.resolve(process.cwd(), "../../../soko-money/db", migration),
             "utf8"
