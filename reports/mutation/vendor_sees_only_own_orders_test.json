@@ -1,0 +1,26 @@
+{
+  "criterion": "vendor_sees_only_own_orders_test",
+  "test": "vendor_sees_only_own_orders_test",
+  "mutated_file": "packages/core/src/api/vendor/orders/middlewares.ts",
+  "mutation": "sed -i \"s/req.seller_context!.seller_id/\\\"__mutation_wrong_seller__\\\"/\" packages/core/src/api/vendor/orders/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "vendor_sees_only_own_orders_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "4d60f106beb340a97b93e55c6814ddddaba62448a2b9b868c3243bd55c6cb569",
+  "sha": "",
+  "at": "2026-09-09T03:10:45.430576+02:00"
+}
