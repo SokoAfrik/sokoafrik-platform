@@ -88,6 +88,34 @@ medusaIntegrationTestRunner({
         expect(appShapedToken.status).toEqual(200)
         expect(appShapedToken.data.user).toMatchObject({ id: user.id, email })
       })
+
+      it("auth_token_shape_accepted_by_medusa_test rejects a corrupted app token", async () => {
+        const email = "app-token-integrity@sokoafrik.test"
+        const password = "somepassword"
+        const { user } = await createAdminUser(
+          dbConnection,
+          adminHeaders,
+          getContainer(),
+          { email }
+        )
+
+        const login = await api.post("/auth/user/emailpass", { email, password })
+        const token = login.data.token as string
+        const corruptedToken = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`
+
+        const corrupted = await api
+          .get("/admin/users/me", {
+            headers: medusaAuthorization(corruptedToken),
+          })
+          .catch((error) => error.response)
+        expect(corrupted.status).toEqual(401)
+
+        const genuine = await api.get("/admin/users/me", {
+          headers: medusaAuthorization(token),
+        })
+        expect(genuine.status).toEqual(200)
+        expect(genuine.data.user).toMatchObject({ id: user.id, email })
+      })
     })
   },
 })
