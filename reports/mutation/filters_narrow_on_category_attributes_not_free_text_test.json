@@ -1,0 +1,26 @@
+{
+  "criterion": "filters_narrow_on_category_attributes_not_free_text_test",
+  "test": "filters_narrow_on_category_attributes_not_free_text_test",
+  "mutated_file": "packages/core/src/api/store/products/middlewares.ts",
+  "mutation": "sed -i 's/delete filters.attributes/delete filters.q/' packages/core/src/api/store/products/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "filters_narrow_on_category_attributes_not_free_text_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "9263d5851329cb9532da19b6af894ccfb9fcdf1adddf128dd8e1f8a505c194dd",
+  "sha": "",
+  "at": "2026-09-09T09:35:37.316301+02:00"
+}
