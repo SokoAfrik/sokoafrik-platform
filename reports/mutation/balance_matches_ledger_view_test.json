@@ -1,0 +1,26 @@
+{
+  "criterion": "balance_matches_ledger_view_test",
+  "test": "balance_matches_ledger_view_test",
+  "mutated_file": "apps/api/src/api/vendor/balance/route.ts",
+  "mutation": "sed -i \"s/where(\\\"vi.seller_id\\\", sellerId)/whereNot(\\\"vi.seller_id\\\", sellerId)/\" apps/api/src/api/vendor/balance/route.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "balance_matches_ledger_view_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "5b2286b265a6d7f94661e2095780a92636b6f8bc8cec96850fbcef473fad6252",
+  "sha": "35f033fe49c03605a5cddfcf6cb6fb1f110f331c",
+  "at": "2026-09-09T05:03:56.493494+02:00"
+}
