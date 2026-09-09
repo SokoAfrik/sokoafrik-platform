@@ -239,6 +239,52 @@ medusaIntegrationTestRunner({
         expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
       })
 
+      it("wrong_pin_refused_test", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "wrong-delivery-pin-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "wrong-delivery-pin-buyer@sokoafrik.test",
+          items: [{ title: "Wrong PIN delivery item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Wrong PIN delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "6142" },
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            adminHeaders
+          )
+        }
+
+        await expect(
+          api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state: "delivered", delivery_pin: "6143" },
+            adminHeaders
+          )
+        ).rejects.toMatchObject({ response: { status: 400 } })
+
+        let persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("picked")
+
+        const delivered = await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          { state: "delivered", delivery_pin: "6142" },
+          adminHeaders
+        )
+        expect(delivered.status).toBe(200)
+        expect(delivered.data.state).toBe("delivered")
+
+        persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
+      })
+
     })
   },
 })
