@@ -10,6 +10,7 @@ import {
 
 type LifecycleBody = {
   state?: unknown
+  delivery_pin?: unknown
 }
 
 type LifecycleAuditEntry = {
@@ -39,6 +40,20 @@ export async function POST(
   }
 
   const state = nextOrderLifecycleState(current, req.body?.state)
+  if (state === "delivered") {
+    const expectedPin = order.metadata?.soko_delivery_pin
+    const suppliedPin = req.body?.delivery_pin
+    if (
+      typeof expectedPin !== "string" ||
+      typeof suppliedPin !== "string" ||
+      suppliedPin !== expectedPin
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "The order delivery PIN is required before delivery can be confirmed"
+      )
+    }
+  }
   const actorId = req.auth_context?.actor_id
   if (!actorId) {
     throw new MedusaError(

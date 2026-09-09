@@ -25,6 +25,7 @@ medusaIntegrationTestRunner({
           email: "order-lifecycle-buyer@sokoafrik.test",
           items: [{ title: "Lifecycle item", quantity: 1, unit_price: 1000 }],
           shipping_methods: [{ name: "Lifecycle delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "4821" },
         })
 
         for (const state of [
@@ -36,7 +37,7 @@ medusaIntegrationTestRunner({
         ]) {
           const response = await api.post(
             `/admin/orders/${order.id}/lifecycle`,
-            { state },
+            state === "delivered" ? { state, delivery_pin: "4821" } : { state },
             adminHeaders
           )
 
@@ -109,12 +110,13 @@ medusaIntegrationTestRunner({
           email: "order-lifecycle-terminal-buyer@sokoafrik.test",
           items: [{ title: "Terminal lifecycle item", quantity: 1, unit_price: 1000 }],
           shipping_methods: [{ name: "Terminal lifecycle delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "9374" },
         })
 
         for (const state of ["paid", "accepted", "ready", "picked", "delivered"]) {
           await api.post(
             `/admin/orders/${order.id}/lifecycle`,
-            { state },
+            state === "delivered" ? { state, delivery_pin: "9374" } : { state },
             adminHeaders
           )
         }
@@ -189,6 +191,52 @@ medusaIntegrationTestRunner({
           expect(Date.parse(entry.changed_at)).toBeGreaterThanOrEqual(before)
           expect(Date.parse(entry.changed_at)).toBeLessThanOrEqual(Date.now())
         }
+      })
+
+      it("pin_required_before_delivered_test", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "delivery-pin-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "delivery-pin-buyer@sokoafrik.test",
+          items: [{ title: "PIN delivery item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "PIN delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "6142" },
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            adminHeaders
+          )
+        }
+
+        await expect(
+          api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state: "delivered" },
+            adminHeaders
+          )
+        ).rejects.toMatchObject({ response: { status: 400 } })
+
+        let persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("picked")
+
+        const delivered = await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          { state: "delivered", delivery_pin: "6142" },
+          adminHeaders
+        )
+        expect(delivered.status).toBe(200)
+        expect(delivered.data.state).toBe("delivered")
+
+        persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
       })
 
     })
