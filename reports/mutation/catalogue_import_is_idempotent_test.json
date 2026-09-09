@@ -1,0 +1,26 @@
+{
+  "criterion": "catalogue_import_is_idempotent_test",
+  "test": "catalogue_import_is_idempotent_test",
+  "mutated_file": "apps/api/src/lib/catalogue-import.ts",
+  "mutation": "sed -i 's/if (existing\\[0\\]) {/if (false) {/' apps/api/src/lib/catalogue-import.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "catalogue_import_is_idempotent_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "21000e953087d9ab03a71098c4085be35f9fc09c2e99e4a007234910f4a9edb8",
+  "sha": "a7cb9ae0dab4f8cd62558952cf739a172546eae0",
+  "at": "2026-09-09T07:25:44.116751+02:00"
+}
