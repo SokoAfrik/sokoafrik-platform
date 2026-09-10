@@ -11,6 +11,7 @@ import {
 type LifecycleBody = {
   state?: unknown
   delivery_pin?: unknown
+  delivery_photo?: unknown
 }
 
 type LifecycleAuditEntry = {
@@ -53,6 +54,15 @@ export async function POST(
         "The order delivery PIN is required before delivery can be confirmed"
       )
     }
+    if (
+      typeof req.body?.delivery_photo !== "string" ||
+      req.body.delivery_photo.trim() === ""
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "A delivery photo is required before delivery can be confirmed"
+      )
+    }
   }
   const actorId = req.auth_context?.actor_id
   if (!actorId) {
@@ -69,6 +79,9 @@ export async function POST(
     metadata: {
       ...(order.metadata ?? {}),
       soko_lifecycle_state: state,
+      ...(state === "delivered"
+        ? { soko_delivery_photo: req.body.delivery_photo }
+        : {}),
       soko_lifecycle_audit: [
         ...audit,
         {

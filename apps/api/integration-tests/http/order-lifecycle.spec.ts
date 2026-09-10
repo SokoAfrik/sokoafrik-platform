@@ -37,7 +37,9 @@ medusaIntegrationTestRunner({
         ]) {
           const response = await api.post(
             `/admin/orders/${order.id}/lifecycle`,
-            state === "delivered" ? { state, delivery_pin: "4821" } : { state },
+            state === "delivered"
+              ? { state, delivery_pin: "4821", delivery_photo: "photo://legal-transition" }
+              : { state },
             adminHeaders
           )
 
@@ -116,7 +118,9 @@ medusaIntegrationTestRunner({
         for (const state of ["paid", "accepted", "ready", "picked", "delivered"]) {
           await api.post(
             `/admin/orders/${order.id}/lifecycle`,
-            state === "delivered" ? { state, delivery_pin: "9374" } : { state },
+            state === "delivered"
+              ? { state, delivery_pin: "9374", delivery_photo: "photo://terminal-state" }
+              : { state },
             adminHeaders
           )
         }
@@ -229,7 +233,11 @@ medusaIntegrationTestRunner({
 
         const delivered = await api.post(
           `/admin/orders/${order.id}/lifecycle`,
-          { state: "delivered", delivery_pin: "6142" },
+          {
+            state: "delivered",
+            delivery_pin: "6142",
+            delivery_photo: "photo://pin-required",
+          },
           adminHeaders
         )
         expect(delivered.status).toBe(200)
@@ -275,7 +283,11 @@ medusaIntegrationTestRunner({
 
         const delivered = await api.post(
           `/admin/orders/${order.id}/lifecycle`,
-          { state: "delivered", delivery_pin: "6142" },
+          {
+            state: "delivered",
+            delivery_pin: "6142",
+            delivery_photo: "photo://wrong-pin",
+          },
           adminHeaders
         )
         expect(delivered.status).toBe(200)
@@ -283,6 +295,59 @@ medusaIntegrationTestRunner({
 
         persisted = await orderService.retrieveOrder(order.id)
         expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
+      })
+
+      it("photo_required_before_delivered_test", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "delivery-photo-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "delivery-photo-buyer@sokoafrik.test",
+          items: [{ title: "Photo delivery item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Photo delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "6142" },
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            adminHeaders
+          )
+        }
+
+        await expect(
+          api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state: "delivered", delivery_pin: "6142" },
+            adminHeaders
+          )
+        ).rejects.toMatchObject({ response: { status: 400 } })
+
+        let persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("picked")
+        expect(persisted.metadata?.soko_delivery_photo).toBeUndefined()
+
+        const delivered = await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          {
+            state: "delivered",
+            delivery_pin: "6142",
+            delivery_photo: "photo://delivery-proof-1",
+          },
+          adminHeaders
+        )
+        expect(delivered.status).toBe(200)
+        expect(delivered.data.state).toBe("delivered")
+
+        persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
+        expect(persisted.metadata?.soko_delivery_photo)
+          .toBe("photo://delivery-proof-1")
       })
 
     })
