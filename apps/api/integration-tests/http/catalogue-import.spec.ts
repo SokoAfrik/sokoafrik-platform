@@ -38,6 +38,27 @@ medusaIntegrationTestRunner({
       expect(persisted.map(({ id }) => id).sort()).toEqual([...first].sort());
     });
 
+    it("duplicate_products_refused_test", async () => {
+      const container = getContainer();
+      const { seller } = await createSellerUser(container, {
+        email: "catalogue-duplicate@sokoafrik.test",
+        name: "Catalogue Duplicate Vendor",
+      });
+      const products = container.resolve<IProductModuleService>(
+        Modules.PRODUCT,
+      );
+
+      await expect(importCatalogue(container, seller.id, [
+        { sourceId: "BAK-001", title: "Blue Dirac" },
+        { sourceId: " bak 001 ", title: "Duplicate Blue Dirac" },
+      ])).rejects.toThrow("Catalogue feed contains duplicate source products");
+
+      const persisted = await products.listProducts({
+        handle: ["catalogue-bak-001"],
+      });
+      expect(persisted).toHaveLength(0);
+    });
+
     it("vendor_product_counts_reconcile_test", async () => {
       const container = getContainer();
       const { seller: firstSeller } = await createSellerUser(container, {

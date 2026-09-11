@@ -24,9 +24,14 @@ export async function importCatalogue(
 ): Promise<string[]> {
   const products = container.resolve<IProductModuleService>(Modules.PRODUCT)
   const imported: string[] = []
+  const handles = items.map((item) => sourceHandle(item.sourceId))
 
-  for (const item of items) {
-    const handle = sourceHandle(item.sourceId)
+  if (new Set(handles).size !== handles.length) {
+    throw new Error("Catalogue feed contains duplicate source products")
+  }
+
+  for (const [index, item] of items.entries()) {
+    const handle = handles[index]
     const existing = await products.listProducts({ handle })
     if (existing[0]) {
       imported.push(existing[0].id)
