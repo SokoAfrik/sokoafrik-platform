@@ -1,0 +1,26 @@
+{
+  "criterion": "duplicate_products_refused_test",
+  "test": "duplicate_products_refused_test",
+  "mutated_file": "apps/api/src/lib/catalogue-import.ts",
+  "mutation": "sed -i 's/new Set(handles).size !== handles.length/new Set(handles).size === handles.length/' apps/api/src/lib/catalogue-import.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "duplicate_products_refused_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "e749aebec9204c47fd7fa59586010ec75f6bdfe42541be3a033297970948486d",
+  "sha": "80ad6a4a293b3ee6f07a8eb6ff29a2a135db24ed",
+  "at": "2026-09-11T02:07:42+02:00"
+}
