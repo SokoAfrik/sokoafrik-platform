@@ -128,5 +128,68 @@ medusaIntegrationTestRunner({
         ).toEqual([matching.id])
       }
     })
+
+    it("capture_flow_collects_attributes_in_the_same_pass_as_media_test", async () => {
+      const seller = await createSellerUser(getContainer(), {
+        email: "capture-attributes-media-vendor@example.com",
+        name: "Capture Attributes And Media Vendor",
+      })
+      const images = [
+        { url: "https://example.com/capture-front.jpg" },
+        { url: "https://example.com/capture-detail.jpg" },
+      ]
+
+      const created = await api.post(
+        "/vendor/products",
+        {
+          status: "published",
+          title: "Captured Linen Dirac",
+          thumbnail: images[0].url,
+          images,
+          attributes: [
+            {
+              title: "Material",
+              type: "text",
+              value: "Linen",
+            },
+          ],
+          variants: [{ title: "Default", sku: "CAPTURE-ATTR-MEDIA" }],
+        },
+        seller.headers,
+      )
+
+      expect([200, 201]).toContain(created.status)
+      const product = created.data.product
+      expect(product.images.map((image: { url: string }) => image.url).sort())
+        .toEqual(images.map((image) => image.url).sort())
+      expect(product.scoped_attributes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Material", type: "text" }),
+        ]),
+      )
+      expect(product.product_attribute_values).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "Linen" })]),
+      )
+
+      const persisted = await api.get(
+        `/vendor/products/${product.id}?fields=images.id,images.url,images.rank,scoped_attributes.*,product_attribute_values.*`,
+        seller.headers,
+      )
+
+      expect(persisted.status).toBe(200)
+      expect(
+        persisted.data.product.images
+          .map((image: { url: string }) => image.url)
+          .sort(),
+      ).toEqual(images.map((image) => image.url).sort())
+      expect(persisted.data.product.scoped_attributes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Material", type: "text" }),
+        ]),
+      )
+      expect(persisted.data.product.product_attribute_values).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "Linen" })]),
+      )
+    })
   },
 })
