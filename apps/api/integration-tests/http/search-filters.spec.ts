@@ -129,6 +129,38 @@ medusaIntegrationTestRunner({
       }
     })
 
+    it("Somali vendor-written content search accepts lowercase customer input", async () => {
+      await createAdminUser(dbConnection, adminHeaders, getContainer())
+      const seller = await createSellerUser(getContainer(), {
+        email: "somali-lowercase-search-vendor@example.com",
+        name: "Somali Lowercase Search Vendor",
+      })
+      const publishableKey = await generatePublishableKey(getContainer())
+      const storeHeaders = generateStoreHeaders({ publishableKey })
+
+      const matching = await createVendorProduct(api, seller.headers, {
+        title: "Kabo Soomaaliyeed",
+        sku: "SOMALI-LOWERCASE-MATCH",
+        extra: {
+          handle: "kabo-soomaaliyeed",
+          description: "Kabo maqaar ah oo gacanta lagu sameeyay",
+        },
+      })
+      await assignProductsToSeller(getContainer(), seller.seller.id, [matching.id])
+
+      for (const q of ["soomaaliyeed", "gacanta"]) {
+        const response = await api.get("/store/products", {
+          params: { q },
+          ...storeHeaders,
+        })
+
+        expect(response.status).toBe(200)
+        expect(
+          response.data.products.map((product: { id: string }) => product.id),
+        ).toContain(matching.id)
+      }
+    })
+
     it("capture_flow_collects_attributes_in_the_same_pass_as_media_test", async () => {
       const seller = await createSellerUser(getContainer(), {
         email: "capture-attributes-media-vendor@example.com",
