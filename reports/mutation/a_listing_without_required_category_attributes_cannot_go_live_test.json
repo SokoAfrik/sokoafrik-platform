@@ -1,0 +1,26 @@
+{
+  "criterion": "a_listing_without_required_category_attributes_cannot_go_live_test",
+  "test": "a_listing_without_required_category_attributes_cannot_go_live_test",
+  "mutated_file": "apps/api/src/api/middlewares.ts",
+  "mutation": "sed -i 's/missing.length > 0/missing.length < 0/' apps/api/src/api/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "a_listing_without_required_category_attributes_cannot_go_live_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "df3f9c5e9fef71e12122cbe39bab4156fa80026fcd5a9e3a5fa4df12fd0863ba",
+  "sha": "",
+  "at": "2026-09-12T12:30:26+02:00"
+}
