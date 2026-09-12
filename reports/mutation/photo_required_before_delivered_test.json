@@ -21,7 +21,7 @@
     "failing_tests": []
   },
   "restored_sha256": "b065075c63f8251fd0b1d55001cfff417069186f2ddeaf6dc26000c0d9bb83ec",
-  "sha": "",
+  "sha": "f9ce97f174a66ac73ce999fd2ae24c7f3b1d21ee",
   "at": "2026-09-12T08:01:53+02:00",
   "notes": "Focused cross-repository Vitest gate ran the real authenticated Mercur HTTP/PostgreSQL/Redis lifecycle flow clean, under mutation, and after byte-identical restoration from /tmp/soko-photo-proof.pPN2GK/route.ts. The production route was restored with cp from that saved copy, never with git checkout."
 }
