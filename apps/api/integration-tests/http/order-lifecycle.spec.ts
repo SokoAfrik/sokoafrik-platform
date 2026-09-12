@@ -350,6 +350,54 @@ medusaIntegrationTestRunner({
           .toBe("photo://delivery-proof-1")
       })
 
+      it("missing delivery photo is refused before a delivery audit is written", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "missing-photo-audit-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "missing-photo-audit-buyer@sokoafrik.test",
+          items: [{ title: "Missing photo audit item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Missing photo audit delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "6142" },
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            adminHeaders
+          )
+        }
+
+        const before = await orderService.retrieveOrder(order.id)
+        const auditBefore = before.metadata?.soko_lifecycle_audit
+        expect(Array.isArray(auditBefore)).toBe(true)
+
+        await expect(
+          api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state: "delivered", delivery_pin: "6142" },
+            adminHeaders
+          )
+        ).rejects.toMatchObject({
+          response: {
+            status: 400,
+            data: {
+              message: "A delivery photo is required before delivery can be confirmed",
+            },
+          },
+        })
+
+        const after = await orderService.retrieveOrder(order.id)
+        expect(after.metadata?.soko_lifecycle_state).toBe("picked")
+        expect(after.metadata?.soko_delivery_photo).toBeUndefined()
+        expect(after.metadata?.soko_lifecycle_audit).toEqual(auditBefore)
+      })
+
       it("blank_delivery_photo_refused_test", async () => {
         await createAdminUser(dbConnection, adminHeaders, getContainer(), {
           email: "blank-delivery-photo-admin@sokoafrik.test",

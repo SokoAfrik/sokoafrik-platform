@@ -1,0 +1,27 @@
+{
+  "criterion": "photo_required_before_delivered_test",
+  "test": "missing delivery photo is refused before a delivery audit is written",
+  "mutated_file": "apps/api/src/api/admin/orders/[id]/lifecycle/route.ts",
+  "mutation": "changed the delivery-photo guard to if (false && (...))",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "missing delivery photo is refused before a delivery audit is written"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "b065075c63f8251fd0b1d55001cfff417069186f2ddeaf6dc26000c0d9bb83ec",
+  "sha": "",
+  "at": "2026-09-12T08:01:53+02:00",
+  "notes": "Focused cross-repository Vitest gate ran the real authenticated Mercur HTTP/PostgreSQL/Redis lifecycle flow clean, under mutation, and after byte-identical restoration from /tmp/soko-photo-proof.pPN2GK/route.ts. The production route was restored with cp from that saved copy, never with git checkout."
+}
