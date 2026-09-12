@@ -38,6 +38,34 @@ medusaIntegrationTestRunner({
       expect(persisted.map(({ id }) => id).sort()).toEqual([...first].sort());
     });
 
+    it("catalogue replay preserves source identity across feed order", async () => {
+      const container = getContainer();
+      const { seller } = await createSellerUser(container, {
+        email: "catalogue-reordered-replay@sokoafrik.test",
+        name: "Catalogue Reordered Replay Vendor",
+      });
+      const feed = [
+        { sourceId: "ORDER-001", title: "Blue Dirac" },
+        { sourceId: "ORDER-002", title: "Leather Sandals" },
+      ];
+
+      const first = await importCatalogue(container, seller.id, feed);
+      const replay = await importCatalogue(container, seller.id, [...feed].reverse());
+
+      expect(replay).toEqual([...first].reverse());
+
+      const products = container.resolve<IProductModuleService>(
+        Modules.PRODUCT,
+      );
+      const persisted = await products.listProducts({
+        handle: feed.map(
+          ({ sourceId }) => `catalogue-${sourceId.toLowerCase()}`,
+        ),
+      });
+      expect(persisted).toHaveLength(feed.length);
+      expect(persisted.map(({ id }) => id).sort()).toEqual([...first].sort());
+    });
+
     it("duplicate_products_refused_test", async () => {
       const container = getContainer();
       const { seller } = await createSellerUser(container, {
