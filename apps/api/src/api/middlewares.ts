@@ -15,13 +15,15 @@ type ProductAttributeValue = {
 
 type Category = { id?: string | null }
 
+type ProductImage = { id?: string | null }
+
 type RequiredAttribute = {
   id: string
   name: string
   categories?: Category | Category[] | null
 }
 
-async function requireCategoryAttributesBeforePublish(
+async function requirePublishableListing(
   req: MedusaRequest,
   _res: MedusaResponse,
   next: MedusaNextFunction,
@@ -32,12 +34,14 @@ async function requireCategoryAttributesBeforePublish(
     fields: [
       "id",
       "categories.id",
+      "images.id",
       "product_attribute_values.attribute.id",
     ],
     filters: { id: req.params.id },
   })
   const product = data[0] as {
     categories?: Category[]
+    images?: ProductImage[]
     product_attribute_values?: ProductAttributeValue[]
   } | undefined
 
@@ -85,6 +89,13 @@ async function requireCategoryAttributesBeforePublish(
     )
   }
 
+  if ((product.images ?? []).length === 0) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "At least one listing image is required before publication",
+    )
+  }
+
   return next()
 }
 
@@ -93,7 +104,7 @@ export default defineMiddlewares({
     {
       method: ["POST"],
       matcher: "/admin/products/:id/confirm",
-      middlewares: [requireCategoryAttributesBeforePublish],
+      middlewares: [requirePublishableListing],
     },
   ],
 })
