@@ -19,5 +19,17 @@
       "bankVerified": "Verify your bank account",
       "catalogue": "Add at least three complete products"
     }
+  },
+  "products": {
+    "searchVisibility": {
+      "title": "Search visibility",
+      "hidden": "This listing is not appearing in customer search because:",
+      "eligible": "This listing is eligible to appear in customer search.",
+      "reasons": {
+        "notPublished": "Publish the listing.",
+        "noMedia": "Add at least one product image.",
+        "noVariants": "Add at least one sellable variant."
+      }
+    }
   }
 }
