@@ -350,6 +350,44 @@ medusaIntegrationTestRunner({
           .toBe("photo://delivery-proof-1")
       })
 
+      it("blank_delivery_photo_refused_test", async () => {
+        await createAdminUser(dbConnection, adminHeaders, getContainer(), {
+          email: "blank-delivery-photo-admin@sokoafrik.test",
+        })
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "blank-delivery-photo-buyer@sokoafrik.test",
+          items: [{ title: "Blank photo delivery item", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Blank photo delivery", amount: 100 }],
+          metadata: { soko_delivery_pin: "6142" },
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            adminHeaders
+          )
+        }
+
+        for (const delivery_photo of ["", "   \n\t"]) {
+          await expect(
+            api.post(
+              `/admin/orders/${order.id}/lifecycle`,
+              { state: "delivered", delivery_pin: "6142", delivery_photo },
+              adminHeaders
+            )
+          ).rejects.toMatchObject({ response: { status: 400 } })
+        }
+
+        const persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("picked")
+        expect(persisted.metadata?.soko_delivery_photo).toBeUndefined()
+      })
+
     })
   },
 })
