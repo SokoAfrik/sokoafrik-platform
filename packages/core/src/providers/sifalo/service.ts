@@ -232,7 +232,7 @@ export class SifaloPaymentProvider extends AbstractPaymentProvider<SifaloOptions
     return { data: input.data ?? {} }
   }
 
-  async refundPayment(input: RefundPaymentInput): Promise<RefundPaymentOutput> {
+  async refundPayment(_input: RefundPaymentInput): Promise<RefundPaymentOutput> {
     // Refunds go back through the money layer, not through the collection rail:
     // the 2026-08-24 decision puts money OUT on bank transfer. A refund raised
     // here must be settled by soko-money, so this records intent and refuses to
