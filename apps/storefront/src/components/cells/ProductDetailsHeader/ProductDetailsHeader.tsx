@@ -16,7 +16,7 @@ import {
 } from "@/lib/helpers/buybox"
 import { Chat } from "@/components/organisms/Chat/Chat"
 import { CompareOffersModal } from "@/components/organisms/CompareOffersModal/CompareOffersModal"
-import { EscrowBuyboxAction } from "@/components/molecules/EscrowBuyboxAction/EscrowBuyboxAction"
+import { ProductDetailsBuyboxAction } from "./ProductDetailsBuyboxAction"
 import { SellerDTO } from "@mercurjs/types"
 import { toast } from "@/lib/helpers/toast"
 import { useCartContext } from "@/components/providers"
@@ -169,22 +169,18 @@ export const ProductDetailsHeader = ({
       {hasAnyPrice && (
         <ProductVariants product={product} selectedVariant={selectedVariant} />
       )}
-      <EscrowBuyboxAction>
-        <Button
-          onClick={handleAddToCart}
-          disabled={isAddToCartDisabled}
-          loading={isAddingItem}
-          className="w-full uppercase mb-4 py-3 flex justify-center"
-          size="large"
-          data-testid="product-add-to-cart-button"
-        >
-          {!hasOffer
+      <ProductDetailsBuyboxAction
+        onClick={handleAddToCart}
+        disabled={isAddToCartDisabled}
+        loading={isAddingItem}
+        label={
+          !hasOffer
             ? "NOT AVAILABLE"
             : offerStock
             ? "ADD TO CART"
-            : "OUT OF STOCK"}
-        </Button>
-      </EscrowBuyboxAction>
+            : "OUT OF STOCK"
+        }
+      />
       {otherOffersCount > 0 && (
         <Button
           variant="tonal"
