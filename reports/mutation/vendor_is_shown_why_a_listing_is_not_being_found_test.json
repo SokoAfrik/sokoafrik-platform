@@ -1,0 +1,26 @@
+{
+  "criterion": "vendor_is_shown_why_a_listing_is_not_being_found_test",
+  "test": "vendor listing search visibility vendor_is_shown_why_a_listing_is_not_being_found_test",
+  "mutated_file": "apps/vendor/src/widgets/product-detail-info.tsx",
+  "mutation": "sed -i \"s/products.searchVisibility.reasons.notPublished/products.searchVisibility.eligible/\" apps/vendor/src/widgets/product-detail-info.tsx",
+  "before": {
+    "failing": 0,
+    "passed": 3,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 2,
+    "failing_tests": [
+      "vendor listing search visibility vendor_is_shown_why_a_listing_is_not_being_found_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 3,
+    "failing_tests": []
+  },
+  "restored_sha256": "ccd6e4e9974bfe81ce2bb7c9bccaea9bc1590da3136cef42277afe1d54be4e06",
+  "sha": "03cf48dd5707a229aaec4948bd02000beaf93e9d",
+  "at": "2026-09-14T14:44:16.505557+02:00"
+}
