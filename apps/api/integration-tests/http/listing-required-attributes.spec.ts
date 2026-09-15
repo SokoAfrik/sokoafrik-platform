@@ -124,5 +124,42 @@ medusaIntegrationTestRunner({
       expect(persisted.data.product.status).toBe("published")
       expect(persisted.data.product.images).toHaveLength(1)
     })
+
+    it("primary_media_is_an_image_never_the_video_test", async () => {
+      await createAdminUser(dbConnection, adminHeaders, getContainer())
+
+      const imageUrl = "https://example.com/listing-primary.jpg"
+      const videoUrl = "https://example.com/listing-capture.mp4"
+      const productResponse = await api.post(
+        "/admin/products",
+        {
+          title: "Listing with captured video",
+          status: "proposed",
+          thumbnail: videoUrl,
+          images: [{ url: imageUrl }],
+          metadata: { listing_video_url: videoUrl },
+        },
+        adminHeaders,
+      )
+      expect(productResponse.status).toBe(200)
+      const productId = productResponse.data.product.id as string
+
+      const confirmation = await api.post(
+        `/admin/products/${productId}/confirm`,
+        {},
+        adminHeaders,
+      )
+      expect(confirmation.status).toBe(200)
+
+      const persisted = await api.get(
+        `/admin/products/${productId}?fields=id,status,thumbnail,metadata,images.url`,
+        adminHeaders,
+      )
+      expect(persisted.status).toBe(200)
+      expect(persisted.data.product.status).toBe("published")
+      expect(persisted.data.product.thumbnail).toBe(imageUrl)
+      expect(persisted.data.product.thumbnail).not.toBe(videoUrl)
+      expect(persisted.data.product.metadata.listing_video_url).toBe(videoUrl)
+    })
   },
 })

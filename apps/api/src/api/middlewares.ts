@@ -6,7 +6,9 @@ import {
 import {
   ContainerRegistrationKeys,
   MedusaError,
+  Modules,
 } from "@medusajs/framework/utils"
+import type { IProductModuleService } from "@medusajs/framework/types"
 import { defineMiddlewares } from "@medusajs/medusa"
 
 type ProductAttributeValue = {
@@ -15,7 +17,7 @@ type ProductAttributeValue = {
 
 type Category = { id?: string | null }
 
-type ProductImage = { id?: string | null }
+type ProductImage = { id?: string | null; url?: string | null }
 
 type RequiredAttribute = {
   id: string
@@ -33,13 +35,17 @@ async function requirePublishableListing(
     entity: "product",
     fields: [
       "id",
+      "thumbnail",
       "categories.id",
       "images.id",
+      "images.url",
       "product_attribute_values.attribute.id",
     ],
     filters: { id: req.params.id },
   })
   const product = data[0] as {
+    id: string
+    thumbnail?: string | null
     categories?: Category[]
     images?: ProductImage[]
     product_attribute_values?: ProductAttributeValue[]
@@ -94,6 +100,12 @@ async function requirePublishableListing(
       MedusaError.Types.INVALID_DATA,
       "At least one listing image is required before publication",
     )
+  }
+
+  const primaryImage = product.images?.[0]?.url
+  if (primaryImage && product.thumbnail !== primaryImage) {
+    const products = req.scope.resolve<IProductModuleService>(Modules.PRODUCT)
+    await products.updateProducts(product.id, { thumbnail: primaryImage })
   }
 
   return next()
