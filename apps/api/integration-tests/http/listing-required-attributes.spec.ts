@@ -93,5 +93,36 @@ medusaIntegrationTestRunner({
       expect(persisted.data.product.status).toBe("proposed")
       expect(persisted.data.product.images).toEqual([])
     })
+
+    it("a listing with one image can go live", async () => {
+      await createAdminUser(dbConnection, adminHeaders, getContainer())
+
+      const productResponse = await api.post(
+        "/admin/products",
+        {
+          title: "Listing with media",
+          status: "proposed",
+          images: [{ url: "https://example.com/listing.jpg" }],
+        },
+        adminHeaders,
+      )
+      expect(productResponse.status).toBe(200)
+      const productId = productResponse.data.product.id as string
+
+      const confirmation = await api.post(
+        `/admin/products/${productId}/confirm`,
+        {},
+        adminHeaders,
+      )
+
+      expect(confirmation.status).toBe(200)
+      const persisted = await api.get(
+        `/admin/products/${productId}?fields=id,status,images.id`,
+        adminHeaders,
+      )
+      expect(persisted.status).toBe(200)
+      expect(persisted.data.product.status).toBe("published")
+      expect(persisted.data.product.images).toHaveLength(1)
+    })
   },
 })
