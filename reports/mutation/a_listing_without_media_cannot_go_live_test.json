@@ -1,0 +1,26 @@
+{
+  "criterion": "a_listing_without_media_cannot_go_live_test",
+  "test": "a_listing_without_media_cannot_go_live_test",
+  "mutated_file": "apps/api/src/api/middlewares.ts",
+  "mutation": "sed -i 's/if ((product.images ?? \\\\[\\\\]).length === 0) {/if (false) {/' apps/api/src/api/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "a_listing_without_media_cannot_go_live_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "befc1e1834f5dad54c47337755829ecd7fe8763f74c9eeba35e2f63e94cbf69e",
+  "sha": "e3386f9389b07320b6e7aa811e2214069f887c23",
+  "at": "2026-09-15T16:14:54.396115+02:00"
+}
