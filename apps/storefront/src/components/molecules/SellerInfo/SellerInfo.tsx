@@ -8,12 +8,16 @@ export const SellerInfo = ({
   showArrow = false,
   bottomBorder = false,
   showReviews = false,
+  rating = 0,
+  reviewCount = 0,
 }: {
   seller: SellerDTO
   header?: boolean
   showArrow?: boolean
   bottomBorder?: boolean
   showReviews?: boolean
+  rating?: number
+  reviewCount?: number
 }) => {
   const { logo, name } = seller
 
@@ -24,6 +28,8 @@ export const SellerInfo = ({
       showArrow={showArrow}
       bottomBorder={bottomBorder}
       showReviews={showReviews}
+      rating={rating}
+      reviewCount={reviewCount}
     />
   )
 

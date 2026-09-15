@@ -1,4 +1,4 @@
-import { StarRating } from "@/components/atoms"
+import { StarRating } from "@/components/atoms/StarRating/StarRating"
 import { SellerAvatar } from "@/components/cells/SellerAvatar/SellerAvatar"
 import { CollapseIcon } from "@/icons"
 import clsx from "clsx"
@@ -34,7 +34,9 @@ export const SellerInfoHeader = ({
       {showReviews && (
         <div className="flex items-center gap-2">
           <StarRating starSize={14} rate={rating || 0} />
-          <span className="label-md text-secondary">{reviewCount} reviews</span>
+          <span className="label-md text-secondary">
+            Service score {rating.toFixed(1)} · {reviewCount} reviews
+          </span>
         </div>
       )}
     </div>
