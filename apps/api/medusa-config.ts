@@ -5,6 +5,52 @@ loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
 
+const S3_FILE_SETTINGS = [
+  'S3_FILE_URL',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'S3_REGION',
+  'S3_BUCKET',
+] as const
+const configuredS3FileSettings = S3_FILE_SETTINGS.filter((key) => process.env[key])
+
+if (
+  configuredS3FileSettings.length > 0 &&
+  configuredS3FileSettings.length !== S3_FILE_SETTINGS.length
+) {
+  const missing = S3_FILE_SETTINGS.filter((key) => !process.env[key])
+  throw new Error(`Private media storage is partially configured; missing ${missing.join(', ')}`)
+}
+
+const FILE_PROVIDER = configuredS3FileSettings.length === S3_FILE_SETTINGS.length
+  ? {
+      resolve: '@medusajs/medusa/file-s3',
+      id: 's3',
+      options: {
+        file_url: process.env.S3_FILE_URL!,
+        access_key_id: process.env.S3_ACCESS_KEY_ID!,
+        secret_access_key: process.env.S3_SECRET_ACCESS_KEY!,
+        region: process.env.S3_REGION!,
+        bucket: process.env.S3_BUCKET!,
+        ...(process.env.S3_ENDPOINT ? { endpoint: process.env.S3_ENDPOINT } : {}),
+        additional_client_config: {
+          forcePathStyle: Boolean(process.env.S3_ENDPOINT),
+        },
+        download_file_duration: 300,
+        // Listing media is private. Bucket policy owns access; object ACLs never make it public.
+        acl: false,
+      },
+    }
+  : {
+      resolve: '@medusajs/medusa/file-local',
+      id: 'local',
+      options: {
+        // The local provider is development-only. Production listing media uses the
+        // private S3 provider above and is read through expiring signed URLs.
+        backend_url: process.env.FILE_BACKEND_URL || 'http://localhost:9000/static',
+      },
+    }
+
 // SIFALO — the collection rail (decision 2026-08-24: money in is Sifalo Pay,
 // money out is bank transfer). Registered ONLY when credentials are present.
 // There is no merchant account yet — it comes with the Somali registration —
@@ -97,18 +143,7 @@ module.exports = withMercur({
     {
       resolve: '@medusajs/medusa/file',
       options: {
-        providers: [
-          {
-            resolve: '@medusajs/medusa/file-local',
-            id: 'local',
-            options: {
-              // The local provider bakes this into every uploaded file URL.
-              // It must be the publicly reachable origin in production, or
-              // images resolve to localhost and render broken.
-              backend_url: process.env.FILE_BACKEND_URL || 'http://localhost:9000/static',
-            },
-          },
-        ],
+        providers: [FILE_PROVIDER],
       },
     },
   ],
