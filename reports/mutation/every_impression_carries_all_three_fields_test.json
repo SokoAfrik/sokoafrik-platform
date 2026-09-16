@@ -1,0 +1,26 @@
+{
+  "criterion": "every_impression_carries_all_three_fields_test",
+  "test": "every_impression_carries_all_three_fields_test",
+  "mutated_file": "apps/api/src/api/middlewares.ts",
+  "mutation": "sed -i 's/const STOREFRONT_SEARCH_MODEL_VERSION = \"medusa-products-v1\"/const STOREFRONT_SEARCH_MODEL_VERSION = \"mutated-model\"/' apps/api/src/api/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "every_impression_carries_all_three_fields_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "f8515a82507bc95825e2e3bf259cf2fa6f0fa1f44f5abb68685036ad7453056f",
+  "sha": "e2f4a4fd912df2a4ee1afb831546fc393c86f7df",
+  "at": "2026-09-16T03:39:26.060628+02:00"
+}
