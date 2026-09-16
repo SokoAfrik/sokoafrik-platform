@@ -161,6 +161,63 @@ medusaIntegrationTestRunner({
       }
     })
 
+    it("every_impression_carries_all_three_fields_test", async () => {
+      await createAdminUser(dbConnection, adminHeaders, getContainer())
+      const publishableKey = await generatePublishableKey(getContainer())
+      const storeHeaders = generateStoreHeaders({ publishableKey })
+
+      const first = await api.post(
+        "/admin/products",
+        {
+          title: "Impression One",
+          handle: "impression-one",
+          status: "published",
+        },
+        adminHeaders,
+      )
+      const second = await api.post(
+        "/admin/products",
+        {
+          title: "Impression Two",
+          handle: "impression-two",
+          status: "published",
+        },
+        adminHeaders,
+      )
+
+      expect([200, 201]).toContain(first.status)
+      expect([200, 201]).toContain(second.status)
+
+      const response = await api.get("/store/products", {
+        params: { id: [first.data.product.id, second.data.product.id] },
+        ...storeHeaders,
+      })
+      expect(response.status).toBe(200)
+
+      const requestId = response.headers["x-soko-request-id"]
+      expect(requestId).toEqual(expect.any(String))
+      const persisted = await dbConnection.raw(
+        `SELECT product_id, position, request_id, model_version
+           FROM storefront_impression
+          WHERE request_id = ?
+          ORDER BY position ASC`,
+        [requestId],
+      )
+      const impressions = persisted.rows
+
+      expect(impressions).toEqual(
+        response.data.products.map(
+          (product: { id: string }, index: number) => ({
+            product_id: product.id,
+            position: index + 1,
+            request_id: requestId,
+            model_version: "medusa-products-v1",
+          }),
+        ),
+      )
+      expect(impressions).toHaveLength(2)
+    })
+
     it("capture_flow_collects_attributes_in_the_same_pass_as_media_test", async () => {
       const seller = await createSellerUser(getContainer(), {
         email: "capture-attributes-media-vendor@example.com",

@@ -51,6 +51,9 @@ module.exports = withMercur({
   modules: [
     ...SIFALO,
     {
+      resolve: './src/modules/storefront-impression',
+    },
+    {
       resolve: '@mercurjs/core/modules/admin-ui',
       options: {
         appDir: '',
