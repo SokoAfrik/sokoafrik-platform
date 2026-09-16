@@ -1,0 +1,26 @@
+{
+  "criterion": "delivery_promise_states_a_cutoff_and_a_day_not_a_range_test",
+  "test": "storefront delivery promise delivery_promise_states_a_cutoff_and_a_day_not_a_range_test",
+  "mutated_file": "apps/storefront/src/components/cells/ProductDetailsShipping/ProductDetailsShipping.tsx",
+  "mutation": "sed -i 's/localNow >= orderBy/localNow > orderBy/' apps/storefront/src/components/cells/ProductDetailsShipping/ProductDetailsShipping.tsx",
+  "before": {
+    "failing": 0,
+    "passed": 2,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 1,
+    "failing_tests": [
+      "storefront delivery promise delivery_promise_states_a_cutoff_and_a_day_not_a_range_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 2,
+    "failing_tests": []
+  },
+  "restored_sha256": "cb68d1ecb76a88e84baa747c755d6b5c35c9926896c4d97e0dcce9b9f94b8ffb",
+  "sha": "007a2cea430f467621a3ea0b736a992d30b82b35",
+  "at": "2026-09-16T10:07:56.585333+02:00"
+}
