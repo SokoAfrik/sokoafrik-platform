@@ -21,6 +21,27 @@ const PASSWORD_RESPONSE_FIELDS = new Set([
   "password_hash",
   "passwordHash",
 ])
+const INERT_UPLOAD_MIME_TYPES = new Set([
+  "image/avif",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+])
+const INERT_UPLOAD_EXTENSIONS = new Set([
+  ".avif",
+  ".gif",
+  ".jpeg",
+  ".jpg",
+  ".mov",
+  ".mp4",
+  ".png",
+  ".webm",
+  ".webp",
+])
 
 type ProductAttributeValue = {
   attribute?: { id?: string } | null
@@ -64,6 +85,37 @@ function preventPasswordExposure(
 ) {
   const originalJson = res.json.bind(res)
   res.json = ((body: unknown) => originalJson(stripPasswordFields(body))) as typeof res.json
+  next()
+}
+
+function requireInertUpload(
+  req: MedusaRequest,
+  _res: MedusaResponse,
+  next: MedusaNextFunction,
+) {
+  const files = Array.isArray(req.files) ? req.files : []
+  const unsafe = files.find((file) => {
+    const filename = typeof file.originalname === "string"
+      ? file.originalname.toLowerCase()
+      : ""
+    const extension = filename.includes(".")
+      ? filename.slice(filename.lastIndexOf("."))
+      : ""
+    const mimeType = typeof file.mimetype === "string"
+      ? file.mimetype.toLowerCase()
+      : ""
+
+    return !INERT_UPLOAD_EXTENSIONS.has(extension) ||
+      !INERT_UPLOAD_MIME_TYPES.has(mimeType)
+  })
+
+  if (unsafe) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Only inert listing media may be uploaded",
+    )
+  }
+
   next()
 }
 
@@ -210,6 +262,11 @@ export default defineMiddlewares({
       matcher,
       middlewares: [preventPasswordExposure],
     })),
+    {
+      method: ["POST"],
+      matcher: "/admin/uploads",
+      middlewares: [requireInertUpload],
+    },
     {
       method: ["GET"],
       matcher: "/store/products",
