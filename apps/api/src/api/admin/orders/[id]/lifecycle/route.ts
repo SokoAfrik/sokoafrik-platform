@@ -41,7 +41,21 @@ export async function POST(
   }
 
   const state = nextOrderLifecycleState(current, req.body?.state)
+  const actorId = req.auth_context?.actor_id
+  if (!actorId) {
+    throw new MedusaError(
+      MedusaError.Types.UNAUTHORIZED,
+      "Order lifecycle changes require an authenticated actor"
+    )
+  }
   if (state === "delivered") {
+    const courierId = order.metadata?.soko_courier_id
+    if (typeof courierId === "string" && courierId === actorId) {
+      throw new MedusaError(
+        MedusaError.Types.UNAUTHORIZED,
+        "A courier cannot approve their own delivery"
+      )
+    }
     const expectedPin = order.metadata?.soko_delivery_pin
     const suppliedPin = req.body?.delivery_pin
     if (
@@ -63,13 +77,6 @@ export async function POST(
         "A delivery photo is required before delivery can be confirmed"
       )
     }
-  }
-  const actorId = req.auth_context?.actor_id
-  if (!actorId) {
-    throw new MedusaError(
-      MedusaError.Types.UNAUTHORIZED,
-      "Order lifecycle changes require an authenticated actor"
-    )
   }
   const storedAudit = order.metadata?.soko_lifecycle_audit
   const audit = Array.isArray(storedAudit)

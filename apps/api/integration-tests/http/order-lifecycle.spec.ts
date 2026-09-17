@@ -436,6 +436,87 @@ medusaIntegrationTestRunner({
         expect(persisted.metadata?.soko_delivery_photo).toBeUndefined()
       })
 
+      it("a_courier_cannot_approve_its_own_delivery_test", async () => {
+        const courierHeaders = {
+          headers: { "x-medusa-access-token": "test_token" },
+        }
+        const { user: courier } = await createAdminUser(
+          dbConnection,
+          courierHeaders,
+          getContainer(),
+          { email: "self-approval-courier@sokoafrik.test" }
+        )
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "self-approval-buyer@sokoafrik.test",
+          items: [{ title: "Separated delivery approval", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Separated delivery", amount: 100 }],
+          metadata: {
+            soko_delivery_pin: "6142",
+            soko_courier_id: courier.id,
+          },
+        })
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            courierHeaders
+          )
+        }
+
+        const before = await orderService.retrieveOrder(order.id)
+        const auditBefore = before.metadata?.soko_lifecycle_audit
+
+        await expect(
+          api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            {
+              state: "delivered",
+              delivery_pin: "6142",
+              delivery_photo: "photo://courier-self-approval",
+            },
+            courierHeaders
+          )
+        ).rejects.toMatchObject({
+          response: {
+            data: { message: "A courier cannot approve their own delivery" },
+          },
+        })
+
+        let persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("picked")
+        expect(persisted.metadata?.soko_delivery_photo).toBeUndefined()
+        expect(persisted.metadata?.soko_lifecycle_audit).toEqual(auditBefore)
+
+        await orderService.updateOrders(order.id, {
+          metadata: {
+            ...(persisted.metadata ?? {}),
+            soko_courier_id: "courier_independent_of_approver",
+          },
+        })
+
+        const approved = await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          {
+            state: "delivered",
+            delivery_pin: "6142",
+            delivery_photo: "photo://independent-approval",
+          },
+          courierHeaders
+        )
+        expect(approved.status).toBe(200)
+        expect(approved.data.state).toBe("delivered")
+
+        persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
+        expect(persisted.metadata?.soko_delivery_photo)
+          .toBe("photo://independent-approval")
+      })
+
     })
   },
 })
