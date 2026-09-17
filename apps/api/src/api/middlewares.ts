@@ -16,6 +16,11 @@ import { STOREFRONT_IMPRESSION_MODULE } from "../modules/storefront-impression"
 import type StorefrontImpressionModuleService from "../modules/storefront-impression/service"
 
 const STOREFRONT_SEARCH_MODEL_VERSION = "medusa-products-v1"
+const PASSWORD_RESPONSE_FIELDS = new Set([
+  "password",
+  "password_hash",
+  "passwordHash",
+])
 
 type ProductAttributeValue = {
   attribute?: { id?: string } | null
@@ -29,6 +34,37 @@ type RequiredAttribute = {
   id: string
   name: string
   categories?: Category | Category[] | null
+}
+
+function stripPasswordFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripPasswordFields)
+  }
+
+  if (!value || typeof value !== "object") {
+    return value
+  }
+
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !PASSWORD_RESPONSE_FIELDS.has(key))
+      .map(([key, nested]) => [key, stripPasswordFields(nested)]),
+  )
+}
+
+function preventPasswordExposure(
+  _req: MedusaRequest,
+  res: MedusaResponse,
+  next: MedusaNextFunction,
+) {
+  const originalJson = res.json.bind(res)
+  res.json = ((body: unknown) => originalJson(stripPasswordFields(body))) as typeof res.json
+  next()
 }
 
 async function requirePublishableListing(
@@ -170,6 +206,10 @@ function recordStorefrontImpressions(
 
 export default defineMiddlewares({
   routes: [
+    ...["/admin/*", "/vendor/*", "/store/*", "/auth/*"].map((matcher) => ({
+      matcher,
+      middlewares: [preventPasswordExposure],
+    })),
     {
       method: ["GET"],
       matcher: "/store/products",
