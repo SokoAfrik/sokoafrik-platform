@@ -88,6 +88,32 @@ function preventPasswordExposure(
   next()
 }
 
+function requireAdminProvisioningAuthority(
+  req: MedusaRequest,
+  _res: MedusaResponse,
+  next: MedusaNextFunction,
+) {
+  if (req.auth_context?.actor_id || req.auth_context?.auth_identity_id) {
+    return next()
+  }
+
+  throw new MedusaError(
+    MedusaError.Types.UNAUTHORIZED,
+    "Public admin registration is disabled",
+  )
+}
+
+function refusePublicAdminIdentityRegistration(
+  _req: MedusaRequest,
+  _res: MedusaResponse,
+  _next: MedusaNextFunction,
+) {
+  throw new MedusaError(
+    MedusaError.Types.UNAUTHORIZED,
+    "Public admin registration is disabled",
+  )
+}
+
 function requireInertUpload(
   req: MedusaRequest,
   _res: MedusaResponse,
@@ -262,6 +288,21 @@ export default defineMiddlewares({
       matcher,
       middlewares: [preventPasswordExposure],
     })),
+    {
+      method: ["POST"],
+      matcher: "/admin/users",
+      middlewares: [requireAdminProvisioningAuthority],
+    },
+    {
+      method: ["POST"],
+      matcher: "/admin/invites/accept",
+      middlewares: [requireAdminProvisioningAuthority],
+    },
+    {
+      method: ["POST"],
+      matcher: "/auth/user/emailpass/register",
+      middlewares: [refusePublicAdminIdentityRegistration],
+    },
     {
       method: ["POST"],
       matcher: "/admin/uploads",
