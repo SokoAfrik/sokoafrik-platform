@@ -28,11 +28,18 @@ export const ProductDetailsPage = async ({
     countryCode: locale,
   })
 
+  const listingVideoUrl = typeof prod.metadata?.listing_video_url === "string"
+    ? prod.metadata.listing_video_url
+    : undefined
+
   return (
     <>
       <div className="flex flex-col md:flex-row lg:gap-12" data-testid="product-details-page">
         <div className="md:w-1/2 md:px-2" data-testid="product-gallery-container">
-          <ProductGallery images={prod?.images || []} />
+          <ProductGallery
+            images={prod?.images || []}
+            videoUrl={listingVideoUrl}
+          />
         </div>
         <div className="md:w-1/2 md:px-2" data-testid="product-details-container">
           <ProductDetails
