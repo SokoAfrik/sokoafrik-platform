@@ -1,0 +1,26 @@
+{
+  "criterion": "public_admin_registration_is_refused_test",
+  "test": "public_admin_registration_is_refused_test",
+  "mutated_file": "apps/api/src/api/middlewares.ts",
+  "mutation": "sed -i 's/middlewares: \\[refusePublicAdminIdentityRegistration\\]/middlewares: []/' apps/api/src/api/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "public_admin_registration_is_refused_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "8fec05fa1ea0863ace265518495dd65d2bf747850f2c1cf7c0d3c508fa305947",
+  "sha": "45805db8c26eb1e0db37b38cca5cbc204005bcef",
+  "at": "2026-09-19T01:16:09+02:00"
+}
