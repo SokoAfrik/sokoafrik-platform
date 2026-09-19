@@ -2,7 +2,7 @@
 
 import useEmblaCarousel from "embla-carousel-react"
 
-import { Indicator } from "@/components/atoms"
+import { Indicator } from "@/components/atoms/Indicator/Indicator"
 import { ArrowLeftIcon, ArrowRightIcon } from "@/icons"
 import { useCallback, useEffect, useState } from "react"
 import { EmblaCarouselType } from "embla-carousel"
@@ -69,10 +69,16 @@ export const CustomCarousel = ({
             />
           </div>
           <div>
-            <button onClick={() => changeSlideHandler(selectedIndex - 1)}>
+            <button
+              aria-label="Previous slide"
+              onClick={() => changeSlideHandler(selectedIndex - 1)}
+            >
               <ArrowLeftIcon color={arrowColor[variant]} />
             </button>
-            <button onClick={() => changeSlideHandler(selectedIndex + 1)}>
+            <button
+              aria-label="Next slide"
+              onClick={() => changeSlideHandler(selectedIndex + 1)}
+            >
               <ArrowRightIcon color={arrowColor[variant]} />
             </button>
           </div>
