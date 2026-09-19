@@ -1,0 +1,26 @@
+{
+  "criterion": "an_executable_upload_is_refused_or_stored_inert_test",
+  "test": "an_executable_upload_is_refused_or_stored_inert_test",
+  "mutated_file": "apps/api/src/api/middlewares.ts",
+  "mutation": "sed -i 's/middlewares: \\[requireInertUpload\\]/middlewares: []/' apps/api/src/api/middlewares.ts",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "an_executable_upload_is_refused_or_stored_inert_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "8fec05fa1ea0863ace265518495dd65d2bf747850f2c1cf7c0d3c508fa305947",
+  "sha": "a322e25048aee8fe5e0c0867dbe083c53f646058",
+  "at": "2026-09-19T07:50:49.977341+02:00"
+}
