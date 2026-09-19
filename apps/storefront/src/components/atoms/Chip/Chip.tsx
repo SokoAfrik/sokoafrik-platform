@@ -43,6 +43,7 @@ export function Chip({
       )}
       onClick={!disabled ? onSelect : undefined}
       role='button'
+      aria-label={color ? value?.toString() : undefined}
       tabIndex={disabled ? -1 : 0}
       data-testid={dataTestId ?? 'chip'}
     >
