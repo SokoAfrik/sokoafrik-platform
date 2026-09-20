@@ -1,0 +1,26 @@
+{
+  "criterion": "video_sits_in_the_gallery_after_the_images_test",
+  "test": "storefront product gallery video_sits_in_the_gallery_after_the_images_test",
+  "mutated_file": "apps/storefront/src/components/organisms/ProductGallery/ProductGallery.tsx",
+  "mutation": "sed -i \"/<GalleryCarousel images={images} \\/>/i\\\\      {videoUrl ? <video data-testid=\\\"product-gallery-video\\\"><source src={videoUrl} type=\\\"video/mp4\\\" /></video> : null}\" apps/storefront/src/components/organisms/ProductGallery/ProductGallery.tsx",
+  "before": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "under_mutation": {
+    "failing": 1,
+    "passed": 0,
+    "failing_tests": [
+      "storefront product gallery video_sits_in_the_gallery_after_the_images_test"
+    ]
+  },
+  "after_restore": {
+    "failing": 0,
+    "passed": 1,
+    "failing_tests": []
+  },
+  "restored_sha256": "36d331b262ae544ef0c2b825b8d3a11e67440e07d18bd2d5ee440fe9aada625d",
+  "sha": "27ddfbb0bfbd6054cce43289e23881d6e805632e",
+  "at": "2026-09-20T22:43:29.439148+02:00"
+}
