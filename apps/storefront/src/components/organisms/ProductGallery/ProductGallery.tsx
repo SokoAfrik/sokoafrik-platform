@@ -17,7 +17,7 @@ export const ProductGallery = ({
         <video
           controls
           preload="metadata"
-          className="mt-3 max-h-[700px] w-full bg-black object-contain"
+          className="mt-3 max-h-[700px] w-full bg-primary object-contain"
           data-testid="product-gallery-video"
         >
           <source src={videoUrl} type="video/mp4" />
