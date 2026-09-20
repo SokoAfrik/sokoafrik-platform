@@ -74,7 +74,7 @@ export const CartDropdown = () => {
     >
       <LocalizedClientLink
         href="/cart"
-        className="relative"
+        className="relative before:absolute before:-inset-3 before:content-['']"
         aria-label="Go to cart"
       >
         <CartIcon size={20} />
