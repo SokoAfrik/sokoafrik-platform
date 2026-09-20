@@ -31,7 +31,7 @@ export const UserDropdown = ({
     >
       <LocalizedClientLink
         href={isLoggedIn ? "/user" : "/login"}
-        className="relative p-3 -m-3"
+        className="relative"
         aria-label="Go to user profile"
       >
         <ProfileIcon size={20} />
