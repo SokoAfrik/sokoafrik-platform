@@ -16,6 +16,7 @@ import {
 } from "../../../../integration-tests/helpers/create-admin-user"
 import { writeCapturedOrderToLedger } from "../../src/workflows/hooks/write-capture-ledger"
 import { releaseDueEscrow } from "../../src/jobs/release-due-escrow"
+import { createDailyWithdrawalRun } from "../../src/jobs/create-daily-withdrawal-run"
 
 jest.setTimeout(180 * 1000)
 
@@ -42,7 +43,8 @@ medusaIntegrationTestRunner({
         { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true, assertOrderIdentity: false, scheduleRelease: false },
         { title: "delivered_order_schedules_escrow_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: false },
         { title: "scheduled_escrow_claimer_posts_balanced_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: true },
-      ].map((testCase) => ({ releaseDue: false, ...testCase })))("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease, releaseDue }) => {
+        { title: "scheduled_withdrawal_run_creates_real_payout_row_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: true, runWithdrawal: true },
+      ].map((testCase) => ({ releaseDue: false, runWithdrawal: false, ...testCase })))("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease, releaseDue, runWithdrawal }) => {
         if (scheduleRelease) {
           for (const migration of [
             "002_payouts.sql",
@@ -54,6 +56,23 @@ medusaIntegrationTestRunner({
             "017_escrow_release_queue.sql",
             "018_escrow_release_terminal.sql",
             "030_platform_account_uniqueness.sql",
+            ...(runWithdrawal ? [
+              "003_manual_and_templates.sql",
+              "005_withdrawals.sql",
+              "010_reconciliation_alert.sql",
+              "012_reconciliation_supersession.sql",
+              "019_withdrawal_run_destinations.sql",
+              "020_daily_withdrawal_runs.sql",
+              "021_withdrawal_float_shortfall.sql",
+              "022_money_guards.sql",
+              "023_payout_release.sql",
+              "024_release_lock_order.sql",
+              "025_bank_verification_destination.sql",
+              "026_withdrawal_run_caps.sql",
+              "031_withdrawal_run_reconciliation_gate.sql",
+              "033_withdrawal_run_reconciliation_gate_closes.sql",
+              "034_reconciliation_gate_config_required.sql",
+            ] : []),
           ]) {
             const sql = readFileSync(
               path.resolve(process.cwd(), "../../../soko-money/db", migration),
@@ -443,6 +462,60 @@ medusaIntegrationTestRunner({
               [order.display_id]
             )
             expect(completedQueue.rows).toEqual([{ completed: true }])
+
+            if (runWithdrawal) {
+              const vendor = await dbConnection.raw(
+                `SELECT vendor_id::text
+                   FROM vendor_identity
+                  WHERE seller_id = ?`,
+                [sellerResult.seller.id]
+              )
+              const payee = await dbConnection.raw(
+                `INSERT INTO payees (
+                   party_type, party_id, msisdn, network, account_holder,
+                   destination, bank_name, bank_account_no, bank_account_name,
+                   bank_verified_at, bank_verified_by
+                 ) VALUES (
+                   'vendor', ?::bigint, '252615111111', 'EVC_PLUS',
+                   'Ledger Capture Seller', 'bank_account', 'Test Bank',
+                   'TEST-ACCOUNT-1', 'Ledger Capture Seller', now(), 'integration-test'
+                 ) RETURNING id::text`,
+                [vendor.rows[0].vendor_id]
+              )
+              const request = await dbConnection.raw(
+                `INSERT INTO withdrawal_requests (
+                   payee_id, amount_minor, currency, requested_by
+                 ) VALUES (?::bigint, 4700, 'USD', 'vendor_web')
+                 RETURNING id::text`,
+                [payee.rows[0].id]
+              )
+
+              const created = await createDailyWithdrawalRun(container, {
+                runDate: "2026-09-22",
+              })
+              expect(created).toEqual([
+                expect.objectContaining({ request_id: request.rows[0].id }),
+              ])
+
+              const payout = await dbConnection.raw(
+                `SELECT p.id::text, p.amount_minor::text, p.currency::text,
+                        p.status::text, p.withdrawal_request_id::text,
+                        w.status::text AS request_status, w.payout_id::text
+                   FROM payouts p
+                   JOIN withdrawal_requests w ON w.id = p.withdrawal_request_id
+                  WHERE p.withdrawal_request_id = ?::bigint`,
+                [request.rows[0].id]
+              )
+              expect(payout.rows).toEqual([{
+                id: created[0].payout_id,
+                amount_minor: "4700",
+                currency: "USD",
+                status: "pending",
+                withdrawal_request_id: request.rows[0].id,
+                request_status: "queued",
+                payout_id: created[0].payout_id,
+              }])
+            }
           }
         }
       })
