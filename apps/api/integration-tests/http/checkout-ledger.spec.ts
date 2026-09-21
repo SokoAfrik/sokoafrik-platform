@@ -34,12 +34,31 @@ medusaIntegrationTestRunner({
 
       })
       it.each([
-        { title: "capture_writes_balanced_journal_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false },
-        { title: "capture_journal_records_order_identity_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true },
-        { title: "split_legs_sum_to_zero_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false },
-        { title: "replayed_capture_is_idempotent_test", replayCount: 2, preCaptureOnly: false, assertOrderIdentity: false },
-        { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true, assertOrderIdentity: false },
-      ])("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity }) => {
+        { title: "capture_writes_balanced_journal_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false, scheduleRelease: false },
+        { title: "capture_journal_records_order_identity_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: false },
+        { title: "split_legs_sum_to_zero_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false, scheduleRelease: false },
+        { title: "replayed_capture_is_idempotent_test", replayCount: 2, preCaptureOnly: false, assertOrderIdentity: false, scheduleRelease: false },
+        { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true, assertOrderIdentity: false, scheduleRelease: false },
+        { title: "delivered_order_schedules_escrow_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true },
+      ])("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease }) => {
+        if (scheduleRelease) {
+          for (const migration of [
+            "002_payouts.sql",
+            "006_bank_destinations.sql",
+            "007_bank_only.sql",
+            "008_vendor_onboarding.sql",
+            "009_admin_settings.sql",
+            "015_escrow_hold_setting.sql",
+            "017_escrow_release_queue.sql",
+          ]) {
+            const sql = readFileSync(
+              path.resolve(process.cwd(), "../../../soko-money/db", migration),
+              "utf8"
+            )
+            await dbConnection.raw(sql)
+          }
+        }
+
         const container: MedusaContainer = getContainer()
         const sellerResult = await createSellerUser(container, {
           email: "ledger-capture@sokoafrik.test",
@@ -213,7 +232,13 @@ medusaIntegrationTestRunner({
         const query = container.resolve(ContainerRegistrationKeys.QUERY)
         const { data: orderGroups } = await query.graph({
           entity: "order_group",
-          fields: ["orders.cart.payment_collection.payments.id"],
+          fields: [
+            "orders.id",
+            "orders.display_id",
+            "orders.items.id",
+            "orders.items.quantity",
+            "orders.cart.payment_collection.payments.id",
+          ],
           filters: { id: completed.data.order_group.id },
         })
         if (preCaptureOnly) {
@@ -263,7 +288,8 @@ medusaIntegrationTestRunner({
         )
 
         const journal = await dbConnection.raw(`
-          SELECT e.transfer_id::text, e.amount_minor::text, e.currency::text, e.reason, e.meta,
+          SELECT e.transfer_id::text, e.amount_minor::text, e.currency::text, e.reason,
+                 e.sub_order_id::text, e.meta,
                  a.kind::text
             FROM ledger_entries e
             JOIN ledger_accounts a ON a.id = e.account_id
@@ -280,7 +306,7 @@ medusaIntegrationTestRunner({
             amount_minor: "-4700",
             currency: "USD",
             reason: "capture",
-            kind: "vendor_held",
+            kind: "escrow_held",
           }),
         ])
         expect(new Set(journal.rows.map((row: any) => row.transfer_id)).size).toBe(1)
@@ -302,6 +328,67 @@ medusaIntegrationTestRunner({
             row.meta.order_group_id === completed.data.order_group.id
             && JSON.stringify(row.meta.order_ids) === JSON.stringify(orderIds)
           ))).toBe(true)
+        }
+
+        if (scheduleRelease) {
+          const order = (orderGroups[0] as any).orders[0]
+          const escrowLeg = journal.rows.find((row: any) => row.kind === "escrow_held")
+          expect(escrowLeg).toEqual(expect.objectContaining({
+            sub_order_id: String(order.display_id),
+            amount_minor: "-4700",
+          }))
+
+          const fulfillableOrder = (
+            await api.get(`/vendor/orders/${order.id}`, sellerResult.headers)
+          ).data.order
+          const fulfillment = (
+            await api.post(
+              `/vendor/orders/${order.id}/fulfillments`,
+              {
+                items: fulfillableOrder.items.map((item: any) => ({
+                  id: item.id,
+                  quantity: Number(item.quantity),
+                })),
+                requires_shipping: true,
+                location_id: stockLocation.id,
+              },
+              sellerResult.headers
+            )
+          ).data.fulfillment
+
+          const delivered = await api.post(
+            `/vendor/orders/${order.id}/fulfillments/${fulfillment.id}/mark-as-delivered`,
+            {},
+            sellerResult.headers
+          )
+          expect(delivered.status).toBe(200)
+
+          let scheduled: { sub_order_id: string; release_at: Date } | undefined
+          for (let attempt = 0; attempt < 80; attempt++) {
+            const result = await dbConnection.raw(
+              `SELECT sub_order_id::text, release_at
+                 FROM escrow_release_queue
+                WHERE sub_order_id = ?::bigint`,
+              [order.display_id]
+            )
+            scheduled = result.rows[0]
+            if (scheduled) break
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+
+          const persistedFulfillment = await dbConnection.raw(
+            "SELECT delivered_at FROM fulfillment WHERE id = ?",
+            [fulfillment.id]
+          )
+          expect(scheduled?.sub_order_id).toBe(String(order.display_id))
+          expect(new Date(scheduled!.release_at).getTime()).toBe(
+            new Date(persistedFulfillment.rows[0].delivered_at).getTime()
+              + 7 * 24 * 60 * 60 * 1000
+          )
+          expect(journal.rows.reduce(
+            (sum: bigint, row: any) => sum + BigInt(row.amount_minor),
+            0n
+          )).toBe(0n)
         }
       })
     })

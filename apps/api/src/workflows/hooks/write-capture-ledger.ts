@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 
 type CapturedOrder = {
   id: string
+  display_id: number
   total: number | string
   currency_code: string
   cart?: { payment_collection?: { captured_amount?: number | string | null } | null } | null
@@ -33,13 +34,13 @@ const platformAccountId = async (tx: any, currency: string): Promise<string> => 
 // undifferentiated pile: the ORDER was split per seller and the LEDGER was not.
 // Nothing could then say what any one vendor was owed, which means nothing could
 // pay them.
-const vendorHeldAccountId = async (tx: any, vendorId: string, currency: string): Promise<string> => {
+const escrowHeldAccountId = async (tx: any, vendorId: string, currency: string): Promise<string> => {
   const existing = await tx("ledger_accounts")
-    .select("id").where({ kind: "vendor_held", owner_type: "vendor", owner_id: vendorId, currency })
+    .select("id").where({ kind: "escrow_held", owner_type: "vendor", owner_id: vendorId, currency })
     .first()
   if (existing) return String(existing.id)
   const [created] = await tx("ledger_accounts")
-    .insert({ kind: "vendor_held", owner_type: "vendor", owner_id: vendorId, currency })
+    .insert({ kind: "escrow_held", owner_type: "vendor", owner_id: vendorId, currency })
     .returning("id")
   return String(created.id)
 }
@@ -60,7 +61,7 @@ export const writeCapturedOrderToLedger = async (
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = await query.graph({
     entity: "order_group",
-    fields: ["id", "orders.id", "orders.total", "orders.currency_code",
+    fields: ["id", "orders.id", "orders.display_id", "orders.total", "orders.currency_code",
              "orders.cart.payment_collection.captured_amount"],
     filters: { id: orderGroupId },
   })
@@ -71,7 +72,11 @@ export const writeCapturedOrderToLedger = async (
   if (currencies.size !== 1) throw new Error(`Order group ${orderGroupId} spans multiple currencies`)
   const currency = [...currencies][0]
 
-  const perOrder = orders.map((o) => ({ id: o.id, minor: asMinorUnits(o.total, `order ${o.id} total`) }))
+  const perOrder = orders.map((o) => ({
+    id: o.id,
+    subOrderId: asMinorUnits(o.display_id, `order ${o.id} display id`),
+    minor: asMinorUnits(o.total, `order ${o.id} total`),
+  }))
   const total = perOrder.reduce((sum, o) => sum + o.minor, 0n)
   const captured = asMinorUnits(
     orders[0].cart?.payment_collection?.captured_amount ?? 0,
@@ -107,13 +112,6 @@ export const writeCapturedOrderToLedger = async (
       )
     }
 
-    // Sum per vendor, because one vendor can hold more than one order in a group.
-    const perVendor = new Map<string, bigint>()
-    for (const o of perOrder) {
-      const seller = sellerOf.get(o.id)!
-      perVendor.set(seller, (perVendor.get(seller) ?? 0n) + o.minor)
-    }
-
     const transferId = (await tx.raw("SELECT gen_random_uuid() AS id")).rows[0].id
     const meta = {
       order_group_id: orderGroupId,
@@ -128,14 +126,16 @@ export const writeCapturedOrderToLedger = async (
       currency, reason: "capture", meta,
     }]
 
-    for (const [sellerId, amount] of perVendor) {
+    for (const order of perOrder) {
+      const sellerId = sellerOf.get(order.id)!
       const vendorId = await vendorIdFor(tx, sellerId)
       legs.push({
         transfer_id: transferId,
-        account_id: await vendorHeldAccountId(tx, vendorId, currency),
-        amount_minor: (-amount).toString(),
+        account_id: await escrowHeldAccountId(tx, vendorId, currency),
+        amount_minor: (-order.minor).toString(),
         currency, reason: "capture",
-        meta: { ...meta, seller_id: sellerId, vendor_id: vendorId },
+        sub_order_id: order.subOrderId.toString(),
+        meta: { ...meta, order_id: order.id, seller_id: sellerId, vendor_id: vendorId },
       })
     }
 
