@@ -104,7 +104,7 @@ module.exports = withMercur({
       options: {
         appDir: '',
         path: '/dashboard',
-        disable: true
+        disable: false
       }
     },
     {
@@ -112,7 +112,7 @@ module.exports = withMercur({
       options: {
         appDir: '',
         path: '/seller',
-        disable: true
+        disable: false
       }
     },
     {
