@@ -15,6 +15,7 @@ import {
   generateStoreHeaders,
 } from "../../../../integration-tests/helpers/create-admin-user"
 import { writeCapturedOrderToLedger } from "../../src/workflows/hooks/write-capture-ledger"
+import { releaseDueEscrow } from "../../src/jobs/release-due-escrow"
 
 jest.setTimeout(180 * 1000)
 
@@ -39,8 +40,9 @@ medusaIntegrationTestRunner({
         { title: "split_legs_sum_to_zero_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: false, scheduleRelease: false },
         { title: "replayed_capture_is_idempotent_test", replayCount: 2, preCaptureOnly: false, assertOrderIdentity: false, scheduleRelease: false },
         { title: "no_ledger_write_without_confirmed_capture_test", replayCount: 0, preCaptureOnly: true, assertOrderIdentity: false, scheduleRelease: false },
-        { title: "delivered_order_schedules_escrow_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true },
-      ])("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease }) => {
+        { title: "delivered_order_schedules_escrow_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: false },
+        { title: "scheduled_escrow_claimer_posts_balanced_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: true },
+      ].map((testCase) => ({ releaseDue: false, ...testCase })))("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease, releaseDue }) => {
         if (scheduleRelease) {
           for (const migration of [
             "002_payouts.sql",
@@ -50,6 +52,8 @@ medusaIntegrationTestRunner({
             "009_admin_settings.sql",
             "015_escrow_hold_setting.sql",
             "017_escrow_release_queue.sql",
+            "018_escrow_release_terminal.sql",
+            "030_platform_account_uniqueness.sql",
           ]) {
             const sql = readFileSync(
               path.resolve(process.cwd(), "../../../soko-money/db", migration),
@@ -389,6 +393,57 @@ medusaIntegrationTestRunner({
             (sum: bigint, row: any) => sum + BigInt(row.amount_minor),
             0n
           )).toBe(0n)
+
+          if (releaseDue) {
+            const releaseAt = new Date(scheduled!.release_at)
+            const released = await releaseDueEscrow(container, {
+              now: new Date(releaseAt.getTime() + 1),
+              limit: 1,
+              claimToken: "11111111-2222-4333-8444-555555555555",
+            })
+            expect(released.claimed).toBe(1)
+            expect(released.released).toEqual([
+              expect.objectContaining({ subOrderId: String(order.display_id) }),
+            ])
+
+            const releaseJournal = await dbConnection.raw(
+              `SELECT e.transfer_id::text, e.amount_minor::text, e.currency::text,
+                      e.reason, e.sub_order_id::text, a.kind::text
+                 FROM ledger_entries e
+                 JOIN ledger_accounts a ON a.id = e.account_id
+                WHERE e.sub_order_id = ?::bigint
+                  AND e.reason IN ('release', 'commission')
+                ORDER BY e.amount_minor DESC`,
+              [order.display_id]
+            )
+            expect(releaseJournal.rows).toEqual([
+              expect.objectContaining({
+                amount_minor: "4700",
+                currency: "USD",
+                reason: "release",
+                kind: "escrow_held",
+              }),
+              expect.objectContaining({
+                amount_minor: "-4700",
+                currency: "USD",
+                reason: "release",
+                kind: "vendor_available",
+              }),
+            ])
+            expect(new Set(releaseJournal.rows.map((row: any) => row.transfer_id)).size).toBe(1)
+            expect(releaseJournal.rows.reduce(
+              (sum: bigint, row: any) => sum + BigInt(row.amount_minor),
+              0n
+            )).toBe(0n)
+
+            const completedQueue = await dbConnection.raw(
+              `SELECT completed_at IS NOT NULL AS completed
+                 FROM escrow_release_queue
+                WHERE sub_order_id = ?::bigint`,
+              [order.display_id]
+            )
+            expect(completedQueue.rows).toEqual([{ completed: true }])
+          }
         }
       })
     })
