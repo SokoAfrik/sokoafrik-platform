@@ -10,6 +10,7 @@ import { HtmlLangSetter } from '@/components/atoms/HtmlLangSetter/HtmlLangSetter
 import { retrieveCart } from '@/lib/data/cart';
 
 import { Providers } from './providers';
+import themeTokens from '../../theme.tokens.json';
 
 const funnelDisplay = Funnel_Display({
   variable: '--font-funnel-sans',
@@ -42,7 +43,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [{ color: '#111111' }]
+  themeColor: [{ color: themeTokens.browserThemeColor }]
 };
 
 export default async function RootLayout({
