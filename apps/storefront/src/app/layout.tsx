@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Funnel_Display } from 'next/font/google';
 
 import './globals.css';
@@ -26,7 +26,23 @@ export const metadata: Metadata = {
   },
   description:
     process.env.NEXT_PUBLIC_SITE_DESCRIPTION || 'Mercur B2C Demo - Marketplace Storefront',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'),
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'SokoAfrik'
+  },
+  icons: {
+    apple: [{ url: '/shop-icons/apple-touch-icon.png' }]
+  },
+  other: {
+    'apple-mobile-web-app-capable': 'yes'
+  }
+};
+
+export const viewport: Viewport = {
+  themeColor: [{ color: '#111111' }]
 };
 
 export default async function RootLayout({
