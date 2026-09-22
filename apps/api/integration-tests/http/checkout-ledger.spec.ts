@@ -44,7 +44,8 @@ medusaIntegrationTestRunner({
         { title: "delivered_order_schedules_escrow_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: false },
         { title: "scheduled_escrow_claimer_posts_balanced_release_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: true },
         { title: "scheduled_withdrawal_run_creates_real_payout_row_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: true, runWithdrawal: true },
-      ].map((testCase) => ({ releaseDue: false, runWithdrawal: false, ...testCase })))("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease, releaseDue, runWithdrawal }) => {
+        { title: "scheduled_withdrawal_payout_matches_released_ledger_balance_test", replayCount: 0, preCaptureOnly: false, assertOrderIdentity: true, scheduleRelease: true, releaseDue: true, runWithdrawal: true, assertPayoutMoney: true },
+      ].map((testCase) => ({ releaseDue: false, runWithdrawal: false, assertPayoutMoney: false, ...testCase })))("$title", async ({ replayCount, preCaptureOnly, assertOrderIdentity, scheduleRelease, releaseDue, runWithdrawal, assertPayoutMoney }) => {
         if (scheduleRelease) {
           for (const migration of [
             "002_payouts.sql",
@@ -498,23 +499,67 @@ medusaIntegrationTestRunner({
               ])
 
               const payout = await dbConnection.raw(
-                `SELECT p.id::text, p.amount_minor::text, p.currency::text,
+                `SELECT p.id::text, p.payee_id::text, p.amount_minor::text, p.currency::text,
                         p.status::text, p.withdrawal_request_id::text,
-                        w.status::text AS request_status, w.payout_id::text
+                        p.batch_id::text, p.attempts_count,
+                        w.status::text AS request_status, w.payout_id::text,
+                        w.payee_id::text AS request_payee_id,
+                        w.amount_minor::text AS request_amount_minor,
+                        w.currency::text AS request_currency,
+                        wr.run_date::text,
+                        (SELECT count(*)::int FROM payout_attempts pa
+                          WHERE pa.payout_id = p.id) AS attempt_rows
                    FROM payouts p
                    JOIN withdrawal_requests w ON w.id = p.withdrawal_request_id
+                   JOIN withdrawal_runs wr ON wr.batch_id = p.batch_id
                   WHERE p.withdrawal_request_id = ?::bigint`,
                 [request.rows[0].id]
               )
               expect(payout.rows).toEqual([{
                 id: created[0].payout_id,
+                payee_id: payee.rows[0].id,
                 amount_minor: "4700",
                 currency: "USD",
                 status: "pending",
                 withdrawal_request_id: request.rows[0].id,
+                batch_id: created[0].batch_id,
+                attempts_count: 0,
                 request_status: "queued",
                 payout_id: created[0].payout_id,
+                request_payee_id: payee.rows[0].id,
+                request_amount_minor: "4700",
+                request_currency: "USD",
+                run_date: "2026-09-22",
+                attempt_rows: 0,
               }])
+
+              if (assertPayoutMoney) {
+                const releasedBalance = await dbConnection.raw(
+                  `SELECT (-b.balance_minor)::text AS available_minor,
+                          b.currency::text
+                     FROM ledger_balances b
+                    WHERE b.kind = 'vendor_available'
+                      AND b.owner_type = 'vendor'
+                      AND b.owner_id = ?::bigint`,
+                  [vendor.rows[0].vendor_id]
+                )
+                expect(releasedBalance.rows).toEqual([{
+                  available_minor: "4700",
+                  currency: "USD",
+                }])
+                expect(payout.rows[0].amount_minor).toBe(
+                  releasedBalance.rows[0].available_minor
+                )
+                expect(payout.rows[0].currency).toBe(
+                  releasedBalance.rows[0].currency
+                )
+                expect(payout.rows[0].amount_minor).toBe(
+                  payout.rows[0].request_amount_minor
+                )
+                expect(payout.rows[0].currency).toBe(
+                  payout.rows[0].request_currency
+                )
+              }
             }
           }
         }
