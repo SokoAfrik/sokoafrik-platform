@@ -3,6 +3,10 @@ import path from "node:path"
 import { medusaIntegrationTestRunner } from "@medusajs/test-utils"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { createSellerUser } from "../../../../integration-tests/helpers/create-seller-user"
+import {
+  adminHeaders,
+  createAdminUser,
+} from "../../../../integration-tests/helpers/create-admin-user"
 
 jest.setTimeout(180000)
 
@@ -221,6 +225,75 @@ medusaIntegrationTestRunner({
           .where("id", staged.id)
           .first()
         expect(verification.verified_at).toBeInstanceOf(Date)
+      })
+
+      it("admin_can_list_staged_bank_verifications_test", async () => {
+        const container = getContainer()
+        const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION)
+        await createAdminUser(dbConnection, adminHeaders, container, {
+          email: "bank-verification-operator@sokoafrik.test",
+        })
+        const vendor = await createSellerUser(container, {
+          email: "bank-verification-listing@sokoafrik.test",
+          name: "Bank Verification Listing",
+        })
+        const [identity] = await db("vendor_identity")
+          .insert({ seller_id: vendor.seller.id })
+          .returning("vendor_id")
+        await db("vendor_profiles").insert({
+          vendor_id: identity.vendor_id,
+          business_name: "Listing Shop",
+          contact_phone: "+252611000313",
+        })
+
+        await api.post(
+          "/vendor/payout-destination",
+          {
+            bank_name: "Premier Bank",
+            bank_account_no: "STAGED-001",
+            bank_account_name: "Listing Shop",
+            swift: "PRMRSOSM",
+          },
+          vendor.headers,
+        )
+        await api.post(
+          "/vendor/payout-destination/verify",
+          {},
+          vendor.headers,
+        )
+
+        const staged = await db("bank_verifications").select("id", "code").first()
+        const unauthenticated = await api.get("/admin/bank-verifications", {
+          validateStatus: () => true,
+        })
+        expect(unauthenticated.status).toBe(401)
+
+        const response = await api.get("/admin/bank-verifications", adminHeaders)
+        expect(response.status).toBe(200)
+        expect(response.data.bank_verifications).toEqual([
+          expect.objectContaining({
+            id: String(staged.id),
+            vendor_id: identity.vendor_id,
+            amount_minor: 5,
+            currency: "USD",
+            bank_name: "Premier Bank",
+            bank_account_no: "STAGED-001",
+            bank_account_name: "Listing Shop",
+            swift: "PRMRSOSM",
+          }),
+        ])
+        expect(response.data.bank_verifications[0]).not.toHaveProperty("code")
+
+        await api.post(
+          "/vendor/payout-destination/verify",
+          { code: staged.code },
+          vendor.headers,
+        )
+        const afterVerification = await api.get(
+          "/admin/bank-verifications",
+          adminHeaders,
+        )
+        expect(afterVerification.data.bank_verifications).toEqual([])
       })
 
       it("vendor_can_request_only_available_balance_once_test", async () => {
