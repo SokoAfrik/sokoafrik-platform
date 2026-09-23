@@ -222,6 +222,156 @@ medusaIntegrationTestRunner({
           .first()
         expect(verification.verified_at).toBeInstanceOf(Date)
       })
+
+      it("vendor_can_request_only_available_balance_once_test", async () => {
+        const container = getContainer()
+        const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION)
+        const caller = await createSellerUser(container, {
+          email: "withdrawal-caller@sokoafrik.test",
+          name: "Withdrawal Caller",
+        })
+        const other = await createSellerUser(container, {
+          email: "withdrawal-other@sokoafrik.test",
+          name: "Withdrawal Other",
+        })
+        const [callerIdentity] = await db("vendor_identity")
+          .insert({ seller_id: caller.seller.id })
+          .returning("vendor_id")
+        const [otherIdentity] = await db("vendor_identity")
+          .insert({ seller_id: other.seller.id })
+          .returning("vendor_id")
+        await db("vendor_profiles").insert([
+          {
+            vendor_id: callerIdentity.vendor_id,
+            business_name: "Withdrawal Caller Shop",
+            contact_phone: "+252611000321",
+          },
+          {
+            vendor_id: otherIdentity.vendor_id,
+            business_name: "Withdrawal Other Shop",
+            contact_phone: "+252611000322",
+          },
+        ])
+
+        const [callerPayee] = await db("payees").insert({
+          party_type: "vendor",
+          party_id: callerIdentity.vendor_id,
+          msisdn: "+252611000321",
+          network: "EVC_PLUS",
+          account_holder: "Withdrawal Caller Shop",
+          destination: "bank_account",
+          bank_name: "Premier Bank",
+          bank_account_no: "WITHDRAW-001",
+          bank_account_name: "Withdrawal Caller Shop",
+          bank_verified_at: db.fn.now(),
+          bank_verified_by: "micro_deposit",
+        }).returning("id")
+        await db("payees").insert({
+          party_type: "vendor",
+          party_id: otherIdentity.vendor_id,
+          msisdn: "+252611000322",
+          network: "EVC_PLUS",
+          account_holder: "Withdrawal Other Shop",
+          destination: "bank_account",
+          bank_name: "Premier Bank",
+          bank_account_no: "WITHDRAW-002",
+          bank_account_name: "Withdrawal Other Shop",
+          bank_verified_at: db.fn.now(),
+          bank_verified_by: "micro_deposit",
+        })
+
+        const accounts = await db("ledger_accounts").insert([
+          { kind: "platform_float", owner_type: "platform", owner_id: null, currency: "USD" },
+          { kind: "vendor_available", owner_type: "vendor", owner_id: callerIdentity.vendor_id, currency: "USD" },
+        ]).returning(["id", "kind"])
+        const platformFloat = accounts.find((account: any) => account.kind === "platform_float")
+        const vendorAvailable = accounts.find((account: any) => account.kind === "vendor_available")
+        const transferId = "aec1b8ff-69ec-47b5-9527-aab899df4da8"
+        await db("ledger_transfers").insert({ transfer_id: transferId })
+        await db("ledger_entries").insert([
+          {
+            transfer_id: transferId,
+            account_id: platformFloat.id,
+            amount_minor: 1750,
+            currency: "USD",
+            reason: "release",
+          },
+          {
+            transfer_id: transferId,
+            account_id: vendorAvailable.id,
+            amount_minor: -1750,
+            currency: "USD",
+            reason: "release",
+          },
+        ])
+        const legs = await db("ledger_entries")
+          .select("account_id", db.raw("amount_minor::text AS amount_minor"))
+          .where("transfer_id", transferId)
+          .orderBy("account_id")
+        expect(legs).toEqual([
+          expect.objectContaining({ amount_minor: "1750" }),
+          expect.objectContaining({ amount_minor: "-1750" }),
+        ])
+        expect(legs.reduce(
+          (sum: bigint, leg: any) => sum + BigInt(leg.amount_minor),
+          0n,
+        )).toBe(0n)
+
+        const created = await api.post(
+          "/vendor/withdrawals",
+          {
+            amount_minor: 1200,
+            currency: "usd",
+            payee_id: "spoofed-payee",
+          },
+          caller.headers,
+        )
+        expect(created.status).toBe(201)
+        expect(created.data.withdrawal).toEqual(expect.objectContaining({
+          amount_minor: 1200,
+          currency: "USD",
+          status: "requested",
+        }))
+
+        const saved = await db("withdrawal_requests")
+          .select(
+            db.raw("payee_id::text AS payee_id"),
+            db.raw("amount_minor::text AS amount_minor"),
+            "currency",
+            "status",
+            "requested_by",
+          )
+          .first()
+        expect(saved).toEqual({
+          payee_id: String(callerPayee.id),
+          amount_minor: "1200",
+          currency: "USD",
+          status: "requested",
+          requested_by: "vendor_web",
+        })
+
+        const duplicate = await api.post(
+          "/vendor/withdrawals",
+          { amount_minor: 100, currency: "USD" },
+          { ...caller.headers, validateStatus: () => true },
+        )
+        expect(duplicate.status).toBe(400)
+        expect(duplicate.data.message).toBe(
+          "A withdrawal request is already open for this vendor",
+        )
+
+        const uncovered = await api.post(
+          "/vendor/withdrawals",
+          { amount_minor: 1, currency: "USD" },
+          { ...other.headers, validateStatus: () => true },
+        )
+        expect(uncovered.status).toBe(400)
+        expect(uncovered.data.message).toBe(
+          "Withdrawal amount exceeds the available vendor balance",
+        )
+        expect(await db("withdrawal_requests").count("id AS count").first())
+          .toEqual({ count: "1" })
+      })
     })
   },
 })
