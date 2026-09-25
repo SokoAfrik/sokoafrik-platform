@@ -37,7 +37,10 @@ medusaIntegrationTestRunner({
   inApp: true,
   testSuite: ({ api, dbConnection, getContainer }) => {
     describe("API password hash exposure", () => {
-      it("a_password_hash_reaches_no_client_test", async () => {
+      it.each([
+        "a_password_hash_reaches_no_client_test",
+        "no_api_response_exposes_a_password_hash_test",
+      ])("%s", async () => {
         const secretMetadata = JSON.stringify({
           password: "plain-text-must-not-leak",
           password_hash: "$2b$12$must-not-leak",
