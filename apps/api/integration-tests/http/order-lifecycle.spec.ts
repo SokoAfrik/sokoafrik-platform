@@ -13,6 +13,69 @@ medusaIntegrationTestRunner({
   inApp: true,
   testSuite: ({ api, dbConnection, getContainer }) => {
     describe("Order lifecycle", () => {
+      it("dispatch_assignment_makes_the_delivery_lifecycle_reachable_test", async () => {
+        const dispatchHeaders = {
+          headers: { "x-medusa-access-token": "dispatch_token" },
+        }
+        const { user: dispatcher } = await createAdminUser(
+          dbConnection,
+          dispatchHeaders,
+          getContainer(),
+          { email: "dispatch-assignment-admin@sokoafrik.test" }
+        )
+        const courierId = "courier_assigned_by_dispatch"
+
+        const orderService =
+          getContainer().resolve<IOrderModuleService>(Modules.ORDER)
+        const order = await orderService.createOrders({
+          currency_code: "usd",
+          email: "dispatch-assignment-buyer@sokoafrik.test",
+          items: [{ title: "Dispatched delivery", quantity: 1, unit_price: 1000 }],
+          shipping_methods: [{ name: "Dispatch delivery", amount: 100 }],
+        })
+
+        const assigned = await api.post(
+          `/admin/orders/${order.id}/dispatch`,
+          { courier_id: courierId, delivery_pin: "not-a-pin" },
+          dispatchHeaders
+        )
+        expect(assigned.status).toBe(200)
+        expect(assigned.data.delivery_pin).toMatch(/^\d{4}$/)
+
+        let persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_courier_id).toBe(courierId)
+        expect(persisted.metadata?.soko_delivery_pin)
+          .toBe(assigned.data.delivery_pin)
+        expect(persisted.metadata?.soko_dispatch_audit).toEqual([
+          expect.objectContaining({
+            courier_id: courierId,
+            assigned_by: dispatcher.id,
+          }),
+        ])
+
+        for (const state of ["paid", "accepted", "ready", "picked"]) {
+          await api.post(
+            `/admin/orders/${order.id}/lifecycle`,
+            { state },
+            dispatchHeaders
+          )
+        }
+
+        const delivered = await api.post(
+          `/admin/orders/${order.id}/lifecycle`,
+          {
+            state: "delivered",
+            delivery_pin: assigned.data.delivery_pin,
+            delivery_photo: "photo://dispatch-independent-approval",
+          },
+          dispatchHeaders
+        )
+        expect(delivered.status).toBe(200)
+
+        persisted = await orderService.retrieveOrder(order.id)
+        expect(persisted.metadata?.soko_lifecycle_state).toBe("delivered")
+      })
+
       it("every_legal_transition_test", async () => {
         await createAdminUser(dbConnection, adminHeaders, getContainer(), {
           email: "order-lifecycle-admin@sokoafrik.test",
