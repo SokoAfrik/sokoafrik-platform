@@ -296,6 +296,110 @@ medusaIntegrationTestRunner({
         expect(afterVerification.data.bank_verifications).toEqual([])
       })
 
+      it("admin_can_confirm_manual_settlement_with_operator_reference_test", async () => {
+        const container = getContainer()
+        const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION)
+        const { user } = await createAdminUser(dbConnection, adminHeaders, container, {
+          email: "manual-settlement-operator@sokoafrik.test",
+        })
+        const [payee] = await db("payees").insert({
+          party_type: "vendor",
+          party_id: 991,
+          msisdn: "+252611000399",
+          network: "EVC_PLUS",
+          account_holder: "Manual Settlement Vendor",
+          destination: "bank_account",
+          bank_name: "Premier Bank",
+          bank_account_no: "MANUAL-001",
+          bank_account_name: "Manual Settlement Vendor",
+          bank_verified_at: db.fn.now(),
+          bank_verified_by: "micro_deposit",
+        }).returning("id")
+        const accounts = await db("ledger_accounts").insert([
+          { kind: "platform_float", owner_type: "platform", owner_id: null, currency: "USD" },
+          { kind: "vendor_available", owner_type: "vendor", owner_id: 991, currency: "USD" },
+          { kind: "settled_out", owner_type: "vendor", owner_id: 991, currency: "USD" },
+        ]).returning(["id", "kind"])
+        const platformFloat = accounts.find((account: any) => account.kind === "platform_float")
+        const vendorAvailable = accounts.find((account: any) => account.kind === "vendor_available")
+        const releaseTransfer = "5db109bd-7d77-47aa-afb6-ddbd4893d099"
+        await db("ledger_transfers").insert({ transfer_id: releaseTransfer })
+        await db("ledger_entries").insert([
+          {
+            transfer_id: releaseTransfer,
+            account_id: platformFloat.id,
+            amount_minor: 17700,
+            currency: "USD",
+            reason: "release",
+          },
+          {
+            transfer_id: releaseTransfer,
+            account_id: vendorAvailable.id,
+            amount_minor: -17700,
+            currency: "USD",
+            reason: "release",
+          },
+        ])
+        const [payout] = await db("payouts").insert({
+          payee_id: payee.id,
+          amount_minor: 17700,
+          currency: "USD",
+          status: "pending",
+        }).returning("id")
+        const [settlement] = await db("manual_settlements").insert({
+          payout_id: payout.id,
+          idempotency_key: "manual-settlement-admin-confirmation",
+          msisdn: "+252611000399",
+          account_holder: "Manual Settlement Vendor",
+          amount_minor: 17700,
+          currency: "USD",
+          network: "EVC_PLUS",
+        }).returning("id")
+
+        const response = await api.post(
+          `/admin/manual-settlements/${settlement.id}/confirm`,
+          { operator_ref: "BANK-TRANSFER-177" },
+          adminHeaders,
+        )
+
+        expect(response.status).toBe(200)
+        expect(response.data.settlement).toEqual({
+          id: String(settlement.id),
+          payout_id: String(payout.id),
+          status: "confirmed",
+          operator_ref: "BANK-TRANSFER-177",
+        })
+        expect(await db("manual_settlements")
+          .select("operator_ref", "confirmed_by", "confirmed_at")
+          .where("id", settlement.id)
+          .first()).toEqual(expect.objectContaining({
+          operator_ref: "BANK-TRANSFER-177",
+          confirmed_by: user.id,
+          confirmed_at: expect.any(Date),
+        }))
+        expect(await db("payouts")
+          .select("status", "settled_at")
+          .where("id", payout.id)
+          .first()).toEqual(expect.objectContaining({
+          status: "paid",
+          settled_at: expect.any(Date),
+        }))
+
+        const legs = await db("ledger_entries as e")
+          .join("ledger_accounts as a", "a.id", "e.account_id")
+          .select("a.kind", db.raw("e.amount_minor::text AS amount_minor"), "e.currency", "e.reason")
+          .where("e.payout_id", payout.id)
+          .orderBy("a.kind")
+        expect(legs).toEqual([
+          { kind: "platform_float", amount_minor: "-17700", currency: "USD", reason: "payout_confirmed" },
+          { kind: "vendor_available", amount_minor: "17700", currency: "USD", reason: "payout_confirmed" },
+        ])
+        expect(legs.reduce(
+          (sum: bigint, leg: any) => sum + BigInt(leg.amount_minor),
+          0n,
+        )).toBe(0n)
+      })
+
       it("vendor_can_request_only_available_balance_once_test", async () => {
         const container = getContainer()
         const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION)
