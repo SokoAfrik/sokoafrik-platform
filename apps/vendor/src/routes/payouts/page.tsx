@@ -11,6 +11,24 @@ export const config: RouteConfig = {
   rank: 1,
 }
 
+export function bankPayoutDestinationInputFromFormData(
+  fields: Pick<FormData, "get">,
+) {
+  return {
+    bank_name: String(fields.get("bank_name") ?? ""),
+    bank_account_no: String(fields.get("bank_account_no") ?? ""),
+    bank_account_name: String(fields.get("bank_account_name") ?? ""),
+    swift: String(fields.get("swift") ?? "") || undefined,
+  }
+}
+
+export async function submitBankPayoutDestination(
+  fields: Pick<FormData, "get">,
+  create: typeof createBankPayoutDestination = createBankPayoutDestination,
+) {
+  return create(bankPayoutDestinationInputFromFormData(fields))
+}
+
 export function BankPayoutDestinationForm() {
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [error, setError] = useState<string | null>(null)
@@ -22,12 +40,7 @@ export function BankPayoutDestinationForm() {
 
     const fields = new FormData(event.currentTarget)
     try {
-      await createBankPayoutDestination({
-        bank_name: String(fields.get("bank_name") ?? ""),
-        bank_account_no: String(fields.get("bank_account_no") ?? ""),
-        bank_account_name: String(fields.get("bank_account_name") ?? ""),
-        swift: String(fields.get("swift") ?? "") || undefined,
-      })
+      await submitBankPayoutDestination(fields)
       setStatus("saved")
     } catch (cause) {
       setStatus("idle")
