@@ -7,6 +7,7 @@ import {
   adminHeaders,
   createAdminUser,
 } from "../../../../integration-tests/helpers/create-admin-user"
+import { createBankPayoutDestination } from "../../../vendor/src/lib/payout-destination"
 
 jest.setTimeout(180000)
 
@@ -112,6 +113,61 @@ medusaIntegrationTestRunner({
           party_type: "vendor",
           party_id: callerIdentity.vendor_id,
         }).count("id AS count").first()).toEqual({ count: "1" })
+      })
+
+      it("vendor_can_create_bank_destination_from_browser_surface_test", async () => {
+        const container = getContainer()
+        const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION)
+        const caller = await createSellerUser(container, {
+          email: "payout-browser-caller@sokoafrik.test",
+          name: "Payout Browser Caller",
+        })
+        const [identity] = await db("vendor_identity")
+          .insert({ seller_id: caller.seller.id })
+          .returning("vendor_id")
+        await db("vendor_profiles").insert({
+          vendor_id: identity.vendor_id,
+          business_name: "Payout Browser Shop",
+          contact_phone: "+252611000303",
+        })
+
+        const destination = await createBankPayoutDestination({
+          bank_name: "Premier Bank",
+          bank_account_no: "BROWSER-001",
+          bank_account_name: "Payout Browser Shop",
+          swift: "PRMRSOSM",
+        }, async (url, init) => {
+          expect(url).toBe("/vendor/payout-destination")
+          expect(init).toEqual(expect.objectContaining({
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+          }))
+          const response = await api.post(
+            String(url),
+            JSON.parse(String(init?.body)),
+            caller.headers,
+          )
+          return {
+            ok: response.status >= 200 && response.status < 300,
+            json: async () => response.data,
+          }
+        })
+
+        expect(destination).toEqual(expect.objectContaining({
+          bank_name: "Premier Bank",
+          bank_account_no: "BROWSER-001",
+          bank_account_name: "Payout Browser Shop",
+          swift: "PRMRSOSM",
+        }))
+        expect(await db("payees")
+          .select("party_type", "party_id", "destination", "bank_account_no")
+          .first()).toEqual({
+          party_type: "vendor",
+          party_id: identity.vendor_id,
+          destination: "bank_account",
+          bank_account_no: "BROWSER-001",
+        })
       })
 
       it("vendor_can_verify_own_bank_payout_destination_test", async () => {
