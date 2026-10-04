@@ -5,6 +5,16 @@ export type BankPayoutDestinationInput = {
   swift?: string
 }
 
+export type VendorWithdrawalInput = {
+  amount_minor: number
+  currency: string
+}
+
+export type VendorWithdrawal = VendorWithdrawalInput & {
+  id: string
+  status: "requested"
+}
+
 type FetchResponse = {
   ok: boolean
   json(): Promise<unknown>
@@ -35,4 +45,26 @@ export async function createBankPayoutDestination(
   }
 
   return body.payout_destination
+}
+
+export async function createVendorWithdrawal(
+  input: VendorWithdrawalInput,
+  request: FetchPayoutDestination = fetch,
+): Promise<VendorWithdrawal | undefined> {
+  const response = await request("/vendor/withdrawals", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  })
+  const body = await response.json() as {
+    message?: string
+    withdrawal?: VendorWithdrawal
+  }
+
+  if (!response.ok) {
+    throw new Error(body.message ?? "Could not request the withdrawal")
+  }
+
+  return body.withdrawal
 }
