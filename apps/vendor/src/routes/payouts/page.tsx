@@ -77,10 +77,7 @@ export function WithdrawalRequestForm() {
 
     const fields = new FormData(event.currentTarget)
     try {
-      await createVendorWithdrawal({
-        amount_minor: Number(fields.get("amount_minor")),
-        currency: String(fields.get("currency") ?? ""),
-      })
+      await createVendorWithdrawal(withdrawalInputFromFormData(fields))
       setStatus("saved")
     } catch (cause) {
       setStatus("idle")
@@ -117,6 +114,13 @@ export function WithdrawalRequestForm() {
       </Button>
     </form>
   )
+}
+
+export function withdrawalInputFromFormData(fields: Pick<FormData, "get">) {
+  return {
+    amount_minor: Number(fields.get("amount_minor")),
+    currency: String(fields.get("currency") ?? ""),
+  }
 }
 
 export default function PayoutsPage() {
