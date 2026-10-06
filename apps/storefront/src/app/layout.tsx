@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { Funnel_Display } from 'next/font/google';
 
 import './globals.css';
 
@@ -11,12 +10,6 @@ import { retrieveCart } from '@/lib/data/cart';
 
 import { Providers } from './providers';
 import themeTokens from '../../theme.tokens.json';
-
-const funnelDisplay = Funnel_Display({
-  variable: '--font-funnel-sans',
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600']
-});
 
 export const metadata: Metadata = {
   title: {
@@ -64,24 +57,6 @@ export default async function RootLayout({
       <Head>
         <link
           rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="dns-prefetch"
-          href="https://fonts.gstatic.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://fonts.googleapis.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="dns-prefetch"
-          href="https://fonts.googleapis.com"
-        />
-        <link
-          rel="preconnect"
           href="https://i.imgur.com"
           crossOrigin="anonymous"
         />
@@ -127,7 +102,7 @@ export default async function RootLayout({
           href="https://api.mercurjs.com"
         />
       </Head>
-      <body className={`${funnelDisplay.className} relative bg-primary text-secondary antialiased`}>
+      <body className="relative bg-primary text-secondary antialiased">
         <HtmlLangSetter />
         <Providers cart={cart}>{children}</Providers>
         <Toaster position="top-right" />
