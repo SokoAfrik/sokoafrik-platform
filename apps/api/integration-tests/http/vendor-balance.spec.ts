@@ -87,6 +87,21 @@ medusaIntegrationTestRunner({
           },
         ])
 
+        const journalLegs = await db("ledger_entries as le")
+          .join("ledger_accounts as la", "la.id", "le.account_id")
+          .select("la.kind")
+          .select(db.raw("le.amount_minor::text AS amount_minor"))
+          .where("le.transfer_id", transferId)
+          .orderBy("la.kind")
+        const [journalBalance] = await db("ledger_entries")
+          .select(db.raw("SUM(amount_minor)::text AS balance_minor"))
+          .where("transfer_id", transferId)
+        expect(journalLegs).toEqual([
+          { kind: "platform_float", amount_minor: "1750" },
+          { kind: "vendor_available", amount_minor: "-1750" },
+        ])
+        expect(journalBalance.balance_minor).toBe("0")
+
         const viewRows = await db("vendor_withdrawable")
           .select(db.raw("payee_id::text AS payee_id"))
           .select(db.raw("available_minor::text AS available_minor"))
